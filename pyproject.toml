@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "local-monitor-agent"
+version = "1.0.0"
+description = "Local Monitoring Agent - Activity and Network Monitoring"
+requires-python = ">=3.10"
+license = {text = "Proprietary"}
+
+dependencies = [
+    "psutil>=5.9.0",
+    "requests>=2.31.0",
+    "pystray>=0.19.0",
+    "Pillow>=10.0.0",
+    "schedule>=1.2.0",
+]
+
+[project.optional-dependencies]
+network = ["scapy>=2.5.0", "dnspython>=2.4.0"]
+macos = ["pyobjc-core>=10.0", "pyobjc-framework-Cocoa>=10.0", "pyobjc-framework-Quartz>=10.0"]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.11.0",
+    "responses>=0.23.0",
+    "ruff>=0.1.0",
+    "black>=23.0.0",
+    "pyinstaller>=6.0.0",
+]
+
+[project.scripts]
+monitor-agent = "src.main:main"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP"]
+ignore = ["E501"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"

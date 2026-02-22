@@ -1,0 +1,114 @@
+📁 local-monitor-agent/
+├── 📁 assets/
+│   ├── 📁 icon/
+│   │   └── 📁 iconset/
+│   │       ├── 📄 icon_1024x1024.png
+│   │       ├── 📄 icon_128x128.png
+│   │       ├── 📄 icon_128x128@2x.png
+│   │       ├── 📄 icon_16x16.png
+│   │       ├── 📄 icon_16x16@2x.png
+│   │       ├── 📄 icon_256x256.png
+│   │       ├── 📄 icon_256x256@2x.png
+│   │       ├── 📄 icon_32x32.png
+│   │       ├── 📄 icon_32x32@2x.png
+│   │       ├── 📄 icon_512x512.png
+│   │       ├── 📄 icon_512x512@2x.png
+│   │       ├── 📄 icon_64x64.png
+│   │       └── 📄 icon_64x64@2x.png
+│   ├── 📄 icon.ico
+│   └── 📄 icon.png
+├── 📁 data/
+│   └── 📄 categories.json
+├── 📁 docs/
+│   ├── 📁 PLAN/
+│   │   ├── 📄 PHASE_13_PLAN.md
+│   │   └── 📄 PLAN.md
+│   ├── 📁 SUMMARY/
+│   │   ├── 📄 SUMMARY_1.md
+│   │   ├── 📄 SUMMARY_2.md
+│   │   ├── 📄 SUMMARY_3.md
+│   │   ├── 📄 SUMMARY_4.md
+│   │   ├── 📄 SUMMARY_5.md
+│   │   └── 📄 SUMMARY_6.md
+│   ├── 📄 DEPLOYMENT_GUIDE.md
+│   ├── 📄 LOCAL_AGENT_OVERVIEW.md
+│   ├── 📄 PILOT_CHECKLIST.md
+│   └── 📄 USER_GUIDE.md
+├── 📁 installer/
+│   ├── 📁 linux/
+│   ├── 📁 macos/
+│   └── 📁 windows/
+├── 📁 scripts/
+│   ├── 📄 build_linux.sh
+│   ├── 📄 build_macos.sh
+│   ├── 📄 build_windows.bat
+│   ├── 📄 generate_categories.py
+│   ├── 📄 health_check.py
+│   ├── 📄 install_windows.bat
+│   ├── 📄 install_windows.ps1
+│   └── 📄 uninstall_windows.bat
+├── 📁 src/
+│   ├── 📁 categorization/
+│   │   ├── 📄 __init__.py
+│   │   └── 📄 categorizer.py
+│   ├── 📁 collectors/
+│   │   ├── 📄 __init__.py
+│   │   ├── 📄 app_collector.py
+│   │   └── 📄 network_collector.py
+│   ├── 📁 network/
+│   │   ├── 📄 __init__.py
+│   │   └── 📄 api_sender.py
+│   ├── 📁 platform/
+│   │   ├── 📄 __init__.py
+│   │   ├── 📄 base.py
+│   │   ├── 📄 linux.py
+│   │   ├── 📄 macos.py
+│   │   └── 📄 windows.py
+│   ├── 📁 session/
+│   │   ├── 📄 __init__.py
+│   │   └── 📄 session_manager.py
+│   ├── 📁 setup/
+│   │   ├── 📄 __init__.py
+│   │   └── 📄 first_launch.py
+│   ├── 📁 storage/
+│   │   ├── 📄 __init__.py
+│   │   └── 📄 sqlite_buffer.py
+│   ├── 📁 ui/
+│   │   ├── 📄 __init__.py
+│   │   ├── 📄 setup_wizard.py
+│   │   └── 📄 tray.py
+│   ├── 📁 utils/
+│   │   ├── 📄 __init__.py
+│   │   ├── 📄 autostart.py
+│   │   ├── 📄 crypto.py
+│   │   └── 📄 updater.py
+│   ├── 📄 __init__.py
+│   ├── 📄 agent_core.py
+│   ├── 📄 config.py
+│   └── 📄 main.py
+├── 📁 tests/
+│   ├── 📄 __init__.py
+│   ├── 📄 conftest.py
+│   ├── 📄 test_agent_core.py
+│   ├── 📄 test_api_sender.py
+│   ├── 📄 test_app_collector.py
+│   ├── 📄 test_autostart.py
+│   ├── 📄 test_categorizer.py
+│   ├── 📄 test_cli.py
+│   ├── 📄 test_gui.py
+│   ├── 📄 test_hardening.py
+│   ├── 📄 test_network_collector.py
+│   ├── 📄 test_packaging.py
+│   ├── 📄 test_platform.py
+│   ├── 📄 test_session_manager.py
+│   ├── 📄 test_sqlite_buffer.py
+│   ├── 📄 test_tray.py
+│   └── 📄 test_updater.py
+├── 📄 .env.template
+├── 📄 .gitignore
+├── 📄 README.md
+├── 📄 local-monitor-agent.spec
+├── 📄 pyproject.toml
+├── 📄 requirements.txt
+├── 📄 structure.md
+└── 📄 version_info.txt
