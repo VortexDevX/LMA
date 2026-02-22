@@ -1,5 +1,5 @@
 # ============================================================
-# LOCAL MONITORING AGENT — DEPENDENCIES
+# LOCAL MONITORING AGENT - DEPENDENCIES
 # ============================================================
 
 # --- Core ---
