@@ -155,9 +155,28 @@ jobs:
           pip install pyinstaller
           pip install pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-Quartz
 
-      - name: Generate icons
-        run: python scripts/generate_icon.py
-        continue-on-error: true
+      - name: Generate macOS icon
+        run: |
+          # Convert iconset PNGs to .icns using macOS iconutil
+          if [ -d "assets/icon/iconset" ]; then
+            # iconutil requires the folder to be named *.iconset
+            cp -r assets/icon/iconset assets/icon.iconset
+            iconutil -c icns assets/icon.iconset -o assets/icon.icns
+            rm -rf assets/icon.iconset
+            echo "Generated assets/icon.icns"
+          elif [ -f "assets/icon.png" ]; then
+            # Fallback: use sips to create a basic icns from png
+            mkdir -p assets/AppIcon.iconset
+            sips -z 1024 1024 assets/icon.png --out assets/AppIcon.iconset/icon_512x512@2x.png
+            sips -z 512 512 assets/icon.png --out assets/AppIcon.iconset/icon_512x512.png
+            sips -z 256 256 assets/icon.png --out assets/AppIcon.iconset/icon_256x256.png
+            sips -z 128 128 assets/icon.png --out assets/AppIcon.iconset/icon_128x128.png
+            sips -z 32 32 assets/icon.png --out assets/AppIcon.iconset/icon_32x32.png
+            sips -z 16 16 assets/icon.png --out assets/AppIcon.iconset/icon_16x16.png
+            iconutil -c icns assets/AppIcon.iconset -o assets/icon.icns
+            rm -rf assets/AppIcon.iconset
+            echo "Generated assets/icon.icns from PNG"
+          fi
 
       - name: Build app bundle
         run: pyinstaller local-monitor-agent.spec --noconfirm

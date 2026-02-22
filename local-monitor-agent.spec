@@ -139,13 +139,13 @@ elif IS_MACOS:
         target_arch=None,
         codesign_identity=CODESIGN_IDENTITY,
         entitlements_file=ENTITLEMENTS_FILE,
-        icon=str(PROJECT_ROOT / "assets" / "icon.icns"),
+        icon=str(PROJECT_ROOT / "assets" / "icon.icns") if (PROJECT_ROOT / "assets" / "icon.icns").exists() else str(PROJECT_ROOT / "assets" / "icon.png"),
     )
 
     app = BUNDLE(
         exe,
         name="LocalMonitorAgent.app",
-        icon=str(PROJECT_ROOT / "assets" / "icon.icns"),
+        icon=str(PROJECT_ROOT / "assets" / "icon.icns") if (PROJECT_ROOT / "assets" / "icon.icns").exists() else str(PROJECT_ROOT / "assets" / "icon.png"),
         bundle_identifier="com.company.localmonitoragent",
         info_plist={
             "CFBundleName": "Local Monitor Agent",
