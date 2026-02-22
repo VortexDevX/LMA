@@ -368,6 +368,8 @@ class NetworkCollector:
     def _load_windows_dns_cache(self):
         """Parse Windows DNS cache from ipconfig /displaydns."""
         try:
+            # CREATE_NO_WINDOW = 0x08000000 prevents console flash
+            creation_flags = 0x08000000 if sys.platform == "win32" else 0
             result = subprocess.run(
                 ["ipconfig", "/displaydns"],
                 capture_output=True,
@@ -375,6 +377,7 @@ class NetworkCollector:
                 timeout=10,
                 encoding="utf-8",
                 errors="ignore",
+                creationflags=creation_flags,
             )
 
             if result.returncode != 0:

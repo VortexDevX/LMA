@@ -126,7 +126,7 @@ class SetupWizard:
         form = ttk.Frame(frame)  # type: ignore
         form.pack(fill="x")
 
-        ttk.Label(form, text="Employee ID:").pack(anchor="w")  # type: ignore
+        ttk.Label(form, text="Employee Code:").pack(anchor="w")  # type: ignore
         self._emp_var = tk.StringVar()  # type: ignore
         emp_entry = ttk.Entry(form, textvariable=self._emp_var, width=30)  # type: ignore
         emp_entry.pack(fill="x", pady=(0, 8))
@@ -163,19 +163,12 @@ class SetupWizard:
 
     def _on_login(self):
         """Validate inputs, start login in background thread."""
-        emp_raw = self._emp_var.get().strip()
+        emp_code = self._emp_var.get().strip()
         pwd = self._pwd_var.get()
         totp = self._totp_var.get().strip()
 
-        if not emp_raw:
-            self._show_error("Employee ID is required.")
-            return
-        try:
-            emp_id = int(emp_raw)
-            if emp_id <= 0:
-                raise ValueError
-        except ValueError:
-            self._show_error("Employee ID must be a positive number.")
+        if not emp_code:
+            self._show_error("Employee Code is required.")
             return
         if not pwd:
             self._show_error("Password is required.")
@@ -189,18 +182,18 @@ class SetupWizard:
 
         threading.Thread(
             target=self._do_login,
-            args=(emp_id, pwd, totp),
+            args=(emp_code, pwd, totp),
             daemon=True,
         ).start()
 
-    def _do_login(self, emp_id: int, password: str, totp: str):
+    def _do_login(self, emp_code: str, password: str, totp: str):
         """Perform login + device registration in background thread."""
         try:
             # Step 1: Login
             result = self._sender.send_immediate(
                 "/api/v1/auth/login",
                 {
-                    "employee_id": emp_id,
+                    "employee_code": emp_code,
                     "password": password,
                     "totp_code": totp,
                 },
@@ -218,10 +211,11 @@ class SetupWizard:
                 return
 
             # Step 2: Register device (best-effort)
+            employee_id = result.get("employee_id") or result.get("id")
             self._sender.send_immediate(
                 "/api/v1/devices/",
                 {
-                    "employee_id": emp_id,
+                    "employee_id": employee_id,
                     "mac_address": self._system_info.mac_address,
                     "ip_address": self._system_info.local_ip,
                     "device_name": self._system_info.hostname,
@@ -230,17 +224,17 @@ class SetupWizard:
             )
 
             # Step 3: Save identity
-            self._buffer.set_config("employee_id", str(emp_id))
+            if employee_id:
+                self._buffer.set_config("employee_id", str(employee_id))
+            self._buffer.set_config("employee_code", emp_code)
             self._buffer.set_config("device_mac", self._system_info.mac_address)
             self._buffer.set_config("hostname", self._system_info.hostname)
             if result.get("full_name"):
                 self._buffer.set_config("employee_name", result["full_name"])
-            if result.get("employee_code"):
-                self._buffer.set_config("employee_code", result["employee_code"])
             if result.get("access_token"):
                 self._buffer.set_config("access_token", result["access_token"])
 
-            name = result.get("full_name", f"Employee #{emp_id}")
+            name = result.get("full_name", emp_code)
             self._root.after(0, self._on_login_success, name)  # type: ignore
 
         except Exception as e:
