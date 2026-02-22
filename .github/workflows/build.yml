@@ -108,8 +108,10 @@ jobs:
       - name: Build executable
         run: pyinstaller local-monitor-agent.spec --noconfirm
 
-      - name: Set permissions
-        run: chmod +x dist/LocalMonitorAgent
+      - name: Rename and set permissions
+        run: |
+          mv dist/LocalMonitorAgent dist/LocalMonitorAgent-linux
+          chmod +x dist/LocalMonitorAgent-linux
 
       - name: GPG sign executable
         if: env.GPG_PRIVATE_KEY != ''
@@ -122,17 +124,17 @@ jobs:
 
           # Sign the executable
           echo "$GPG_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback \
-            --passphrase-fd 0 --armor --detach-sign dist/LocalMonitorAgent
+            --passphrase-fd 0 --armor --detach-sign dist/LocalMonitorAgent-linux
 
-          echo "Signed: dist/LocalMonitorAgent.asc"
+          echo "Signed: dist/LocalMonitorAgent-linux.asc"
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
           name: LocalMonitorAgent-Linux
           path: |
-            dist/LocalMonitorAgent
-            dist/LocalMonitorAgent.asc
+            dist/LocalMonitorAgent-linux
+            dist/LocalMonitorAgent-linux.asc
 
   # ============================================================
   # macOS Build + Ad-hoc Signing (free)
@@ -197,7 +199,13 @@ jobs:
         run: |
           if [ -d "dist/LocalMonitorAgent.app" ]; then
             hdiutil create -volname "LocalMonitorAgent" -srcfolder dist/LocalMonitorAgent.app \
-              -ov -format UDZO dist/LocalMonitorAgent.dmg
+              -ov -format UDZO dist/LocalMonitorAgent-macos.dmg
+          fi
+
+      - name: Rename binary
+        run: |
+          if [ -f "dist/LocalMonitorAgent" ]; then
+            mv dist/LocalMonitorAgent dist/LocalMonitorAgent-macos
           fi
 
       - name: Upload macOS artifact
@@ -206,8 +214,8 @@ jobs:
           name: LocalMonitorAgent-macOS
           path: |
             dist/LocalMonitorAgent.app
-            dist/LocalMonitorAgent.dmg
-            dist/LocalMonitorAgent
+            dist/LocalMonitorAgent-macos.dmg
+            dist/LocalMonitorAgent-macos
 
   # ============================================================
   # Create GitHub Release (on tag push)
