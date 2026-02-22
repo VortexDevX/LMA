@@ -34,6 +34,25 @@ datas = [
     (str(PROJECT_ROOT / "assets" / "icon.png"), "assets"),
 ]
 
+# Add .ico for Windows wizard window icon
+if IS_WINDOWS and (PROJECT_ROOT / "assets" / "icon.ico").exists():
+    datas.append((str(PROJECT_ROOT / "assets" / "icon.ico"), "assets"))
+
+# Add Tcl/Tk data files for tkinter (needed for setup wizard)
+import tkinter
+tcl_dir = os.path.join(os.path.dirname(tkinter.__file__), "..", "tcl")
+if not os.path.isdir(tcl_dir):
+    # Try alternate location (some Python installs)
+    python_base = os.path.dirname(sys.executable)
+    tcl_dir = os.path.join(python_base, "tcl")
+
+if os.path.isdir(tcl_dir):
+    for item in os.listdir(tcl_dir):
+        item_path = os.path.join(tcl_dir, item)
+        if os.path.isdir(item_path) and (item.startswith("tcl") or item.startswith("tk")):
+            datas.append((item_path, item))
+            print(f"[SPEC] Adding Tcl/Tk data: {item_path}")
+
 # Binary files (SSL DLLs for Windows)
 binaries = []
 if IS_WINDOWS:
@@ -47,6 +66,12 @@ if IS_WINDOWS:
             binaries.append((dll_path, "."))
             print(f"[SPEC] Adding SSL binary: {dll_path}")
 
+    # Add tkinter DLL
+    tk_dll = os.path.join(dll_dir, "_tkinter.pyd")
+    if os.path.exists(tk_dll):
+        binaries.append((tk_dll, "."))
+        print(f"[SPEC] Adding tkinter binary: {tk_dll}")
+
 # Hidden imports
 hiddenimports = [
     "PIL._tkinter_finder",
@@ -54,6 +79,9 @@ hiddenimports = [
     "_ssl",
     "certifi",
     "src.utils.autostart",
+    "tkinter",
+    "tkinter.ttk",
+    "_tkinter",
 ]
 
 if IS_WINDOWS:
@@ -65,7 +93,6 @@ else:
 
 # Excludes (reduce size)
 excludes = [
-    "tkinter",
     "unittest",
     "pydoc",
     "doctest",
