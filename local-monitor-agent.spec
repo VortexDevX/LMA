@@ -39,19 +39,28 @@ if IS_WINDOWS and (PROJECT_ROOT / "assets" / "icon.ico").exists():
     datas.append((str(PROJECT_ROOT / "assets" / "icon.ico"), "assets"))
 
 # Add Tcl/Tk data files for tkinter (needed for setup wizard)
-import tkinter
-tcl_dir = os.path.join(os.path.dirname(tkinter.__file__), "..", "tcl")
-if not os.path.isdir(tcl_dir):
-    # Try alternate location (some Python installs)
-    python_base = os.path.dirname(sys.executable)
-    tcl_dir = os.path.join(python_base, "tcl")
+try:
+    import tkinter
+    _tk_dir = os.path.dirname(tkinter.__file__)
 
-if os.path.isdir(tcl_dir):
-    for item in os.listdir(tcl_dir):
-        item_path = os.path.join(tcl_dir, item)
-        if os.path.isdir(item_path) and (item.startswith("tcl") or item.startswith("tk")):
-            datas.append((item_path, item))
-            print(f"[SPEC] Adding Tcl/Tk data: {item_path}")
+    # Search multiple potential Tcl/Tk data locations
+    _tcl_search_paths = [
+        os.path.join(_tk_dir, "..", "tcl"),                    # Windows
+        os.path.join(os.path.dirname(sys.executable), "tcl"),  # Windows alt
+        os.path.join(sys.prefix, "lib"),                       # Linux/macOS
+        os.path.join(sys.prefix, "share"),                     # Linux alt
+    ]
+
+    for _search in _tcl_search_paths:
+        if os.path.isdir(_search):
+            for item in os.listdir(_search):
+                item_path = os.path.join(_search, item)
+                if os.path.isdir(item_path) and (item.startswith("tcl") or item.startswith("tk")):
+                    datas.append((item_path, item))
+                    print(f"[SPEC] Adding Tcl/Tk data: {item_path}")
+
+except ImportError:
+    print("[SPEC] WARNING: tkinter not available - setup wizard may not work in bundled exe")
 
 # Binary files (SSL DLLs for Windows)
 binaries = []
