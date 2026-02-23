@@ -32,6 +32,7 @@ block_cipher = None
 datas = [
     (str(PROJECT_ROOT / "data" / "categories.json"), "data"),
     (str(PROJECT_ROOT / "assets" / "icon.png"), "assets"),
+    (str(PROJECT_ROOT / ".env"), "."),
 ]
 
 # Add .ico for Windows wizard window icon

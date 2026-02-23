@@ -75,6 +75,11 @@ _env_vars.update(_load_env_file(_project_root / ".env"))
 # 2. Data directory (for production/bundled exe)
 _env_vars.update(_load_env_file(_get_data_dir() / ".env"))
 
+# 3. Executable directory (fallback for bundled exe override)
+if getattr(sys, 'frozen', False):
+    _exe_dir = Path(sys.executable).parent
+    _env_vars.update(_load_env_file(_exe_dir / ".env"))
+
 
 def _env(key: str, default: str = "") -> str:
     """Get value from environment or .env file."""
