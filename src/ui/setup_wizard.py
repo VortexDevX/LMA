@@ -163,13 +163,14 @@ class SetupWizard:
 
     def _on_login(self):
         """Validate inputs, start login in background thread."""
-        emp_code = self._emp_var.get().strip()
+        emp_raw = self._emp_var.get().strip()
         pwd = self._pwd_var.get()
         totp = self._totp_var.get().strip()
 
-        if not emp_code:
+        if not emp_raw:
             self._show_error("Employee Code is required.")
             return
+        emp_code = emp_raw.upper()
         if not pwd:
             self._show_error("Password is required.")
             return
@@ -189,11 +190,50 @@ class SetupWizard:
     def _do_login(self, emp_code: str, password: str, totp: str):
         """Perform login + device registration in background thread."""
         try:
+            # Step 0: Resolve employee code to ID
+            status, body = self._sender.get_immediate_raw(
+                f"/api/v1/employees/by-code/{emp_code}"
+            )
+            if status is None:
+                self._root.after(  # type: ignore
+                    0, self._on_login_error, "Could not reach server. Check network."
+                )
+                return
+            if status in (401, 403):
+                self._root.after(  # type: ignore
+                    0, self._on_login_error,
+                    f"Unauthorized (HTTP {status}). Check API key permissions."
+                )
+                return
+            if status == 404:
+                self._root.after(0, self._on_login_error, "Employee not found.")  # type: ignore
+                return
+            if status < 200 or status >= 300:
+                self._root.after(  # type: ignore
+                    0, self._on_login_error,
+                    f"Employee lookup failed (HTTP {status})."
+                )
+                return
+
+            info = self._sender.get_immediate(
+                f"/api/v1/employees/by-code/{emp_code}"
+            )
+            if info is None:
+                self._root.after(0, self._on_login_error, "Employee lookup failed.")  # type: ignore
+                return
+            if info.get("is_active") is False:
+                self._root.after(0, self._on_login_error, "Your account is inactive.")  # type: ignore
+                return
+            emp_id = info.get("id")
+            if not isinstance(emp_id, int):
+                self._root.after(0, self._on_login_error, "Employee not found.")  # type: ignore
+                return
+
             # Step 1: Login
             result = self._sender.send_immediate(
                 "/api/v1/auth/login",
                 {
-                    "employee_code": emp_code,
+                    "employee_id": emp_id,
                     "password": password,
                     "totp_code": totp,
                 },
@@ -211,11 +251,10 @@ class SetupWizard:
                 return
 
             # Step 2: Register device (best-effort)
-            employee_id = result.get("employee_id") or result.get("id")
             self._sender.send_immediate(
                 "/api/v1/devices/",
                 {
-                    "employee_id": employee_id,
+                    "employee_id": emp_id,
                     "mac_address": self._system_info.mac_address,
                     "ip_address": self._system_info.local_ip,
                     "device_name": self._system_info.hostname,
@@ -224,17 +263,18 @@ class SetupWizard:
             )
 
             # Step 3: Save identity
-            if employee_id:
-                self._buffer.set_config("employee_id", str(employee_id))
+            self._buffer.set_config("employee_id", str(emp_id))
             self._buffer.set_config("employee_code", emp_code)
             self._buffer.set_config("device_mac", self._system_info.mac_address)
             self._buffer.set_config("hostname", self._system_info.hostname)
             if result.get("full_name"):
                 self._buffer.set_config("employee_name", result["full_name"])
+            if result.get("employee_code"):
+                self._buffer.set_config("employee_code", result["employee_code"])
             if result.get("access_token"):
                 self._buffer.set_config("access_token", result["access_token"])
 
-            name = result.get("full_name", emp_code)
+            name = result.get("full_name", f"Employee #{emp_id}")
             self._root.after(0, self._on_login_success, name)  # type: ignore
 
         except Exception as e:

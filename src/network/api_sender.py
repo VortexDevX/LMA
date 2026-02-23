@@ -481,6 +481,19 @@ class APISender:
             logger.debug(f"GET request failed: {url}: {e}")
             return None
 
+    def get_immediate_raw(self, endpoint: str) -> tuple[int | None, str]:
+        """
+        Send a GET request and return (status_code, response_text).
+        status_code is None if request failed before response.
+        """
+        url = f"{self._base_url}{endpoint}"
+        try:
+            response = self._session.get(url, timeout=self._timeout)
+            return response.status_code, response.text
+        except Exception as e:
+            logger.debug(f"GET request failed: {url}: {e}")
+            return None, str(e)
+
     # --------------------------------------------------
     # Status
     # --------------------------------------------------

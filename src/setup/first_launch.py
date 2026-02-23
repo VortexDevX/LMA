@@ -18,7 +18,7 @@ logger = logging.getLogger("agent.setup")
 def run_first_launch(buffer: SQLiteBuffer, sender: APISender) -> bool:
     """
     Run the first-launch setup flow.
-    Prompts for employee code, password, and TOTP, verifies with backend,
+    Prompts for employee ID, password, and TOTP, verifies with backend,
     registers the device.
 
     Returns True if setup completed successfully, False otherwise.
@@ -37,46 +37,50 @@ def run_first_launch(buffer: SQLiteBuffer, sender: APISender) -> bool:
     print(f"  IP:       {system_info.local_ip}")
     print("")
 
-    # Step 1: Get employee code
+    # Step 1: Get employee code and resolve to ID
     employee_code = _prompt_employee_code()
     if employee_code is None:
         return False
 
+    employee_id = _resolve_employee_code(sender, employee_code)
+    if employee_id is None:
+        return False
+
     # Step 2: Get password and TOTP, then verify via login
-    login_result = _verify_login(sender, employee_code)
+    login_result = _verify_login(sender, employee_id)
     if login_result is None:
         return False
 
     employee_data = login_result
 
     # Step 3: Register device
-    employee_id = employee_data.get("employee_id") or employee_data.get("id")
     device_registered = _register_device(
         sender, employee_id, system_info
     )
 
     # Step 4: Save identity
-    if employee_id:
-        buffer.set_config("employee_id", str(employee_id))
+    buffer.set_config("employee_id", str(employee_id))
     buffer.set_config("employee_code", employee_code)
     buffer.set_config("device_mac", system_info.mac_address)
     buffer.set_config("hostname", system_info.hostname)
 
     if employee_data.get("full_name"):
         buffer.set_config("employee_name", employee_data["full_name"])
+    if employee_data.get("employee_code"):
+        buffer.set_config("employee_code", employee_data["employee_code"])
     if employee_data.get("access_token"):
         buffer.set_config("access_token", employee_data["access_token"])
 
     print("")
     print("=" * 50)
-    name = employee_data.get("full_name", employee_code)
+    name = employee_data.get("full_name", f"Employee #{employee_id}")
     print(f"  Setup complete! Welcome, {name}")
     print("  The agent will now run in the background.")
     print("=" * 50)
     print("")
 
     logger.info(
-        f"First launch complete: employee_code={employee_code}, "
+        f"First launch complete: employee_id={employee_id}, "
         f"device={system_info.hostname}"
     )
     return True
@@ -86,11 +90,11 @@ def _prompt_employee_code() -> str | None:
     """Prompt for employee code with retries."""
     for attempt in range(3):
         try:
-            raw = input("  Enter your Employee Code: ").strip()
+            raw = input("  Enter your Employee Code (e.g., EMP101): ").strip()
             if not raw:
                 print("  Employee Code cannot be empty.")
                 continue
-            return raw
+            return raw.upper()
         except (KeyboardInterrupt, EOFError):
             print("\n  Setup cancelled.")
             return None
@@ -99,7 +103,52 @@ def _prompt_employee_code() -> str | None:
     return None
 
 
-def _verify_login(sender: APISender, employee_code: str) -> dict | None:
+def _resolve_employee_code(sender: APISender, employee_code: str) -> int | None:
+    """Resolve employee code to employee ID using backend."""
+    try:
+        status, body = sender.get_immediate_raw(
+            f"/api/v1/employees/by-code/{employee_code}"
+        )
+        if status is None:
+            print("  Could not reach the server. Check your network.")
+            return None
+        if status == 401 or status == 403:
+            print(f"  Unauthorized (HTTP {status}). Check API key permissions.")
+            print(f"  Response: {body[:200]}")
+            return None
+        if status == 404:
+            print("  Employee not found.")
+            return None
+        if status < 200 or status >= 300:
+            print(f"  Employee lookup failed (HTTP {status}).")
+            print(f"  Response: {body[:200]}")
+            return None
+
+        # 2xx: try to parse JSON
+        try:
+            result = sender.get_immediate(f"/api/v1/employees/by-code/{employee_code}")
+        except Exception:
+            result = None
+        if result is None:
+            print("  Employee lookup failed (invalid JSON response).")
+            return None
+
+        if result.get("is_active") is False:
+            print("  Your account is inactive.")
+            return None
+
+        emp_id = result.get("id")
+        if not isinstance(emp_id, int):
+            print("  Employee not found.")
+            return None
+
+        return emp_id
+    except Exception as e:
+        print(f"  Employee lookup failed: {e}")
+        return None
+
+
+def _verify_login(sender: APISender, employee_id: int) -> dict | None:
     """Prompt for password and TOTP code, verify with backend via login."""
     for attempt in range(3):
         try:
@@ -119,7 +168,7 @@ def _verify_login(sender: APISender, employee_code: str) -> dict | None:
             result = sender.send_immediate(
                 "/api/v1/auth/login",
                 {
-                    "employee_code": employee_code,
+                    "employee_id": employee_id,
                     "password": password,
                     "totp_code": totp_code,
                 },

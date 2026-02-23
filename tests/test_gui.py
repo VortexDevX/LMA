@@ -95,6 +95,7 @@ class TestWizardLoginLogic:
     def test_do_login_success(self):
         wizard = self._make_wizard()
 
+        wizard._sender.get_immediate.return_value = {"id": 1, "is_active": True}
         wizard._sender.send_immediate.side_effect = [
             # Login response
             {
@@ -106,7 +107,7 @@ class TestWizardLoginLogic:
             {"id": 5},
         ]
 
-        wizard._do_login(1, "password", "123456")
+        wizard._do_login("EMP001", "password", "123456")
 
         # Should save identity
         wizard._buffer.set_config.assert_any_call("employee_id", "1")
@@ -122,9 +123,9 @@ class TestWizardLoginLogic:
     def test_do_login_network_error(self):
         wizard = self._make_wizard()
 
-        wizard._sender.send_immediate.return_value = None  # Network failure
+        wizard._sender.get_immediate.return_value = None  # Network failure
 
-        wizard._do_login(1, "password", "123456")
+        wizard._do_login("EMP001", "password", "123456")
 
         # Should schedule error callback
         wizard._root.after.assert_called() # type: ignore
@@ -134,14 +135,27 @@ class TestWizardLoginLogic:
         error_msg = call_args[0][2]
         assert "server" in error_msg.lower() or "network" in error_msg.lower()
 
+    def test_do_login_employee_inactive(self):
+        wizard = self._make_wizard()
+
+        wizard._sender.get_immediate.return_value = {"id": 1, "is_active": False}
+
+        wizard._do_login("EMP001", "password", "123456")
+
+        wizard._root.after.assert_called() # type: ignore
+        call_args = wizard._root.after.call_args_list[-1] # type: ignore
+        error_msg = call_args[0][2]
+        assert "inactive" in error_msg.lower()
+
     def test_do_login_invalid_credentials(self):
         wizard = self._make_wizard()
 
+        wizard._sender.get_immediate.return_value = {"id": 1, "is_active": True}
         wizard._sender.send_immediate.return_value = {
             "detail": "Invalid password"
         }
 
-        wizard._do_login(1, "wrong", "123456")
+        wizard._do_login("EMP001", "wrong", "123456")
 
         wizard._root.after.assert_called() # type: ignore
         call_args = wizard._root.after.call_args_list[-1] # type: ignore
@@ -152,12 +166,13 @@ class TestWizardLoginLogic:
         """Device reg failure should not prevent setup completion."""
         wizard = self._make_wizard()
 
+        wizard._sender.get_immediate.return_value = {"id": 1, "is_active": True}
         wizard._sender.send_immediate.side_effect = [
             {"access_token": "tok", "full_name": "User"},  # Login OK
             None,  # Device registration fails
         ]
 
-        wizard._do_login(1, "pass", "123456")
+        wizard._do_login("EMP001", "pass", "123456")
 
         # Should still save identity and call success
         wizard._buffer.set_config.assert_any_call("employee_id", "1")

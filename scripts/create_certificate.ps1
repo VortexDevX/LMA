@@ -16,8 +16,12 @@ Write-Host " Creating Code Signing Certificate"
 Write-Host "========================================"
 Write-Host ""
 
-# Note: This script uses Cert:\CurrentUser\My which does not require admin.
-# If you need to install to Cert:\LocalMachine, run as Administrator instead.
+# Check if running as admin
+$admin = [bool]([Security.Principal.WindowsIdentity]::GetCurrent().Groups -match "S-1-5-32-544")
+if (-not $admin) {
+    Write-Error "This script must be run as Administrator"
+    exit 1
+}
 
 Write-Host "Certificate Details:"
 Write-Host ("  Name: " + $CertName)
@@ -98,24 +102,6 @@ try {
         -Force | Out-Null
     
     Write-Host "[OK] Public certificate exported to: $pubCertPath"
-    Write-Host ""
-    
-    # Install certificate to Trusted Root CA store (current user)
-    # This allows SignTool verification to pass for self-signed certs
-    Write-Host "Installing certificate to Trusted Root store..."
-    try {
-        $rootStore = New-Object System.Security.Cryptography.X509Certificates.X509Store(
-            "Root",
-            [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
-        )
-        $rootStore.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-        $rootStore.Add($cert)
-        $rootStore.Close()
-        Write-Host "[OK] Certificate added to Trusted Root (CurrentUser)"
-    } catch {
-        Write-Host "[WARN] Could not add to Trusted Root: $($_.Exception.Message)" -ForegroundColor Yellow
-        Write-Host "       You may see verification warnings during signing."
-    }
     Write-Host ""
     
     Write-Host "========================================"

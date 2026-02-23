@@ -13,7 +13,8 @@ from src.agent_core import AgentCore
 from src.storage.sqlite_buffer import SQLiteBuffer
 from src.network.api_sender import APISender
 from src.setup.first_launch import (
-    _prompt_employee_id,
+    _prompt_employee_code,
+    _resolve_employee_code,
     _verify_login,
     _register_device,
     _detect_device_type,
@@ -65,28 +66,23 @@ class TestFirstLaunchPrompts:
     """Test first launch input prompts."""
 
     @patch("builtins.input", return_value="42")
-    def test_prompt_employee_id_valid(self, mock_input):
-        result = _prompt_employee_id()
-        assert result == 42
+    def test_prompt_employee_code_valid(self, mock_input):
+        result = _prompt_employee_code()
+        assert result == "42"
 
     @patch("builtins.input", side_effect=["", "", ""])
-    def test_prompt_employee_id_empty_retries(self, mock_input):
-        result = _prompt_employee_id()
+    def test_prompt_employee_code_empty_retries(self, mock_input):
+        result = _prompt_employee_code()
         assert result is None
 
     @patch("builtins.input", side_effect=["abc", "xyz", "!!!"])
-    def test_prompt_employee_id_invalid_retries(self, mock_input):
-        result = _prompt_employee_id()
-        assert result is None
-
-    @patch("builtins.input", side_effect=["0", "-1", "5"])
-    def test_prompt_employee_id_rejects_non_positive(self, mock_input):
-        result = _prompt_employee_id()
-        assert result == 5
+    def test_prompt_employee_code_invalid_retries(self, mock_input):
+        result = _prompt_employee_code()
+        assert result == "ABC"
 
     @patch("builtins.input", side_effect=KeyboardInterrupt)
-    def test_prompt_employee_id_keyboard_interrupt(self, mock_input):
-        result = _prompt_employee_id()
+    def test_prompt_employee_code_keyboard_interrupt(self, mock_input):
+        result = _prompt_employee_code()
         assert result is None
 
 
@@ -133,6 +129,24 @@ class TestLoginVerification:
         result = _verify_login(sender, employee_id=1)
         assert result is None
 
+
+class TestEmployeeCodeResolution:
+    """Test employee code resolution flow."""
+
+    def test_resolve_employee_code_success(self, sender):
+        with patch.object(sender, "get_immediate", return_value={"id": 42, "is_active": True}):
+            emp_id = _resolve_employee_code(sender, "EMP042")
+            assert emp_id == 42
+
+    def test_resolve_employee_code_inactive(self, sender):
+        with patch.object(sender, "get_immediate", return_value={"id": 42, "is_active": False}):
+            emp_id = _resolve_employee_code(sender, "EMP042")
+            assert emp_id is None
+
+    def test_resolve_employee_code_not_found(self, sender):
+        with patch.object(sender, "get_immediate", return_value={"detail": "not found"}):
+            emp_id = _resolve_employee_code(sender, "EMP999")
+            assert emp_id is None
 
 class TestDeviceRegistration:
     """Test device registration."""

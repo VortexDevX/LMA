@@ -37,26 +37,12 @@ agent.lock
 .env.local
 config.local.json
 
-# Certificates & Signing
-*.pfx
-*.cer
-*.pem
-*.key
-*.p12
-*.asc
-*.sig
-*.gpg
-localmonitoragent.te
-localmonitoragent.mod
-localmonitoragent.pp
-*.desktop
-
 # Build artifacts
+*.spec
 *.exe
 *.dmg
 *.deb
 *.AppImage
-*.zip
 
 # Coverage
 htmlcov/
