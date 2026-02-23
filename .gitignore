@@ -48,3 +48,6 @@ config.local.json
 htmlcov/
 .coverage
 coverage.xml
+
+lma_cert.cer
+lma_cert.pfx
