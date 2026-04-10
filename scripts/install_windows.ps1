@@ -71,7 +71,7 @@ Write-Host "        OK: $InstallDir\LocalMonitorAgent.exe"
 Write-Host "  [2/5] Creating configuration..."
 @"
 API_KEY=$ApiKey
-API_BASE_URL=https://manan.digimeck.in
+API_BASE_URL=https://emp-manan.mvlab.cloud
 LOG_LEVEL=INFO
 "@ | Out-File -FilePath "$DataDir\.env" -Encoding utf8NoBOM -Force
 Write-Host "        OK: $DataDir\.env"

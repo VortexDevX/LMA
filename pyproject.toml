@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "local-monitor-agent"
-version = "1.0.0"
+version = "1.0.1"
 description = "Local Monitoring Agent - Activity and Network Monitoring"
 requires-python = ">=3.10"
 license = {text = "Proprietary"}

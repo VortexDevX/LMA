@@ -427,7 +427,7 @@ For issues, feature requests, or questions:
 
 ## 🎯 Version
 
-**Current Version**: 1.0.0
+**Current Version**: 1.0.1
 
 **Last Updated**: February 2026
 

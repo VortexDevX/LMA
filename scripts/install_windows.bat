@@ -77,7 +77,7 @@ REM --- Create .env config ---
 echo   [2/5] Creating configuration...
 (
     echo API_KEY=%API_KEY%
-    echo API_BASE_URL=https://manan.digimeck.in
+    echo API_BASE_URL=https://emp-manan.mvlab.cloud
     echo LOG_LEVEL=INFO
 ) > "%DATA_DIR%\.env"
 echo         OK: %DATA_DIR%\.env

@@ -91,7 +91,7 @@ class AgentConfig:
     """Central configuration for the monitoring agent."""
 
     # --- API ---
-    API_BASE_URL: str = _env("API_BASE_URL", "https://manan.digimeck.in")
+    API_BASE_URL: str = _env("API_BASE_URL", "https://emp-manan.mvlab.cloud")
     API_KEY: str = _env("API_KEY", "")
 
     # --- Intervals (seconds) ---
@@ -125,7 +125,7 @@ class AgentConfig:
     LOG_LEVEL: str = _env("LOG_LEVEL", "INFO")
 
     # --- Agent Metadata ---
-    AGENT_VERSION: str = "1.0.0"
+    AGENT_VERSION: str = "1.0.1"
     SCHEMA_VERSION: int = 1
     SOURCE: str = "local_agent"
 

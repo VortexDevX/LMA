@@ -80,7 +80,7 @@ scripts\install_windows.bat <YOUR_API_KEY>
 
 ```dotenv
 API_KEY=<YOUR_API_KEY>
-API_BASE_URL=https://manan.digimeck.in
+API_BASE_URL=https://emp-manan.mvlab.cloud
 LOG_LEVEL=INFO
 ```
 
