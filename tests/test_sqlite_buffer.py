@@ -4,11 +4,10 @@ Run with: python -m pytest tests/test_sqlite_buffer.py -v
 """
 
 import time
-import json
-import pytest
-from pathlib import Path
 
-from src.storage.sqlite_buffer import SQLiteBuffer, PendingRecord, VALID_TABLES
+import pytest
+
+from src.storage.sqlite_buffer import VALID_TABLES, PendingRecord, SQLiteBuffer
 
 
 @pytest.fixture
@@ -248,9 +247,7 @@ class TestMarkFailed:
         record_id = db.insert_pending("pending_sessions", {"test": True})
         db.mark_permanently_failed("pending_sessions", record_id)
 
-        cursor = db._conn.execute(
-            "SELECT status FROM pending_sessions WHERE id = ?", (record_id,)
-        )
+        cursor = db._conn.execute("SELECT status FROM pending_sessions WHERE id = ?", (record_id,))
         row = cursor.fetchone()
         assert row[0] == "permanently_failed"
 
@@ -305,9 +302,7 @@ class TestCleanup:
 
         # Set old created_at
         old_time = time.time() - (48 * 3600)
-        db._conn.execute(
-            "UPDATE pending_sessions SET created_at = ?", (old_time,)
-        )
+        db._conn.execute("UPDATE pending_sessions SET created_at = ?", (old_time,))
         db._conn.commit()
 
         db.cleanup_sent(older_than_hours=24)

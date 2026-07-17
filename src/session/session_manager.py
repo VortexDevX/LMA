@@ -5,17 +5,16 @@ Manages the overall monitoring session lifecycle.
 Coordinates flush cycles and packages data for the API sender.
 """
 
-import time
-import threading
 import logging
+import threading
+import time
 from datetime import datetime, timezone
-from typing import Optional
 
-from src.config import config
-from src.platform import get_platform
+from src.categorization.categorizer import Categorizer
 from src.collectors.app_collector import AppCollector
 from src.collectors.network_collector import NetworkCollector
-from src.categorization.categorizer import Categorizer
+from src.config import config
+from src.platform import get_platform
 from src.storage.sqlite_buffer import SQLiteBuffer
 
 logger = logging.getLogger("agent.session")
@@ -41,7 +40,7 @@ class SessionManager:
         self._network_collector = NetworkCollector()
 
         # Session state
-        self._session_start: Optional[str] = None
+        self._session_start: str | None = None
         self._total_active_sec: float = 0.0
         self._total_idle_sec: float = 0.0
         self._total_bytes_up: int = 0
@@ -49,13 +48,13 @@ class SessionManager:
         self._last_flush_time: float = 0.0
 
         # Identity (loaded from buffer config)
-        self._employee_id: Optional[int] = None
-        self._device_mac: Optional[str] = None
+        self._employee_id: int | None = None
+        self._device_mac: str | None = None
 
         # Thread control
         self._running = False
-        self._flush_thread: Optional[threading.Thread] = None
-        self._session_thread: Optional[threading.Thread] = None
+        self._flush_thread: threading.Thread | None = None
+        self._session_thread: threading.Thread | None = None
         self._lock = threading.Lock()
 
         self._load_identity()
@@ -75,8 +74,7 @@ class SessionManager:
             self._device_mac = self._platform.get_mac_address()
 
         logger.info(
-            f"Identity loaded: employee_id={self._employee_id}, "
-            f"device_mac={self._device_mac}"
+            f"Identity loaded: employee_id={self._employee_id}, " f"device_mac={self._device_mac}"
         )
 
     def set_identity(self, employee_id: int, device_mac: str):
@@ -93,11 +91,11 @@ class SessionManager:
         return self._employee_id is not None and self._device_mac is not None
 
     @property
-    def employee_id(self) -> Optional[int]:
+    def employee_id(self) -> int | None:
         return self._employee_id
 
     @property
-    def device_mac(self) -> Optional[str]:
+    def device_mac(self) -> str | None:
         return self._device_mac
 
     # --------------------------------------------------
@@ -228,8 +226,7 @@ class SessionManager:
     def _session_update_loop(self):
         """Send session update every SESSION_UPDATE_INTERVAL seconds."""
         logger.debug(
-            f"Session update loop started "
-            f"(interval={config.SESSION_UPDATE_INTERVAL}s)"
+            f"Session update loop started " f"(interval={config.SESSION_UPDATE_INTERVAL}s)"
         )
 
         last_update = time.time()
@@ -455,7 +452,7 @@ class SessionManager:
         return self._running
 
     @property
-    def session_start(self) -> Optional[str]:
+    def session_start(self) -> str | None:
         return self._session_start
 
     def get_status(self) -> dict:

@@ -10,14 +10,14 @@ Usage:
     python health_check.py --json
 """
 
-import sys
-import os
-import json
-import sqlite3
-import socket
 import argparse
-from pathlib import Path
+import json
+import os
+import socket
+import sqlite3
+import sys
 from datetime import datetime
+from pathlib import Path
 
 
 def get_data_dir() -> Path:
@@ -43,8 +43,11 @@ def check_process(data_dir: Path) -> dict:
             try:
                 if sys.platform == "win32":
                     import ctypes
+
                     kernel32 = ctypes.windll.kernel32
-                    handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+                    handle = kernel32.OpenProcess(
+                        0x1000, False, pid
+                    )  # PROCESS_QUERY_LIMITED_INFORMATION
                     if handle:
                         kernel32.CloseHandle(handle)
                         result["running"] = True
@@ -108,9 +111,7 @@ def check_database(data_dir: Path) -> dict:
 
         # Last sent record timestamp
         try:
-            cursor.execute(
-                "SELECT MAX(created_at) as last_sent FROM sent_log"
-            )
+            cursor.execute("SELECT MAX(created_at) as last_sent FROM sent_log")
             row = cursor.fetchone()
             if row and row["last_sent"]:
                 result["last_sent"] = row["last_sent"]
@@ -134,6 +135,7 @@ def check_autostart() -> dict:
     if sys.platform == "win32":
         try:
             import winreg
+
             key = winreg.OpenKey(
                 winreg.HKEY_CURRENT_USER,
                 r"Software\Microsoft\Windows\CurrentVersion\Run",
@@ -168,7 +170,7 @@ def check_autostart() -> dict:
     return result
 
 
-def check_network(api_url: str = "manan.digimeck.in") -> dict:
+def check_network(api_url: str = "emp-manan.mvlab.cloud") -> dict:
     """Check network connectivity to backend API."""
     result = {"reachable": False, "host": api_url, "latency_ms": None}
 
@@ -179,7 +181,7 @@ def check_network(api_url: str = "manan.digimeck.in") -> dict:
         sock.close()
         result["reachable"] = True
         result["latency_ms"] = round(elapsed, 1)
-    except (socket.timeout, ConnectionRefusedError, OSError) as e:
+    except (TimeoutError, ConnectionRefusedError, OSError) as e:
         result["error"] = str(e)
 
     return result
@@ -192,7 +194,7 @@ def check_env_config(data_dir: Path) -> dict:
 
     if env_path.exists():
         try:
-            with open(env_path, "r", encoding="utf-8", errors="ignore") as f:
+            with open(env_path, encoding="utf-8", errors="ignore") as f:
                 for line in f:
                     line = line.strip()
                     if line and not line.startswith("#") and "=" in line:
@@ -219,19 +221,21 @@ def check_logs(data_dir: Path) -> dict:
     if log_dir.exists():
         for f in sorted(log_dir.glob("*.log*")):
             stat = f.stat()
-            result["files"].append({
-                "name": f.name,
-                "size_kb": round(stat.st_size / 1024, 1),
-                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-            })
+            result["files"].append(
+                {
+                    "name": f.name,
+                    "size_kb": round(stat.st_size / 1024, 1),
+                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                }
+            )
 
         # Read last 5 lines of main log
         main_log = log_dir / "agent.log"
         if main_log.exists():
             try:
-                with open(main_log, "r", encoding="utf-8", errors="ignore") as f:
+                with open(main_log, encoding="utf-8", errors="ignore") as f:
                     lines = f.readlines()
-                    result["last_lines"] = [l.rstrip() for l in lines[-5:]]
+                    result["last_lines"] = [line.rstrip() for line in lines[-5:]]
             except Exception:
                 pass
 
@@ -371,11 +375,14 @@ def run_health_check(as_json: bool = False):
 def _ok(msg):
     print(f"  [OK]   {msg}")
 
+
 def _warn(msg):
     print(f"  [WARN] {msg}")
 
+
 def _fail(msg):
     print(f"  [FAIL] {msg}")
+
 
 def _info(msg):
     print(f"  [INFO] {msg}")

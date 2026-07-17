@@ -4,13 +4,12 @@ Handles employee authentication and device registration on first run.
 CLI-based for now (GUI in Phase 15).
 """
 
-import sys
-import logging
 import getpass
+import logging
 
+from src.network.api_sender import APISender
 from src.platform import get_platform
 from src.storage.sqlite_buffer import SQLiteBuffer
-from src.network.api_sender import APISender
 
 logger = logging.getLogger("agent.setup")
 
@@ -37,26 +36,25 @@ def run_first_launch(buffer: SQLiteBuffer, sender: APISender) -> bool:
     print(f"  IP:       {system_info.local_ip}")
     print("")
 
-    # Step 1: Get employee code and resolve to ID
+    # Step 1: Get employee code
     employee_code = _prompt_employee_code()
     if employee_code is None:
         return False
 
-    employee_id = _resolve_employee_code(sender, employee_code)
-    if employee_id is None:
-        return False
-
-    # Step 2: Get password and TOTP, then verify via login
-    login_result = _verify_login(sender, employee_id)
+    # Step 2: Authenticate by employee code. Avoid a separate employee lookup:
+    # it leaked account state and no longer matches the backend auth contract.
+    login_result = _verify_login(sender, employee_code)
     if login_result is None:
         return False
 
     employee_data = login_result
+    employee_id = employee_data.get("employee_id")
+    if not isinstance(employee_id, int):
+        print("  Login response did not include an employee identity.")
+        return False
 
     # Step 3: Register device
-    device_registered = _register_device(
-        sender, employee_id, system_info
-    )
+    _register_device(sender, employee_id, system_info)
 
     # Step 4: Save identity
     buffer.set_config("employee_id", str(employee_id))
@@ -68,8 +66,6 @@ def run_first_launch(buffer: SQLiteBuffer, sender: APISender) -> bool:
         buffer.set_config("employee_name", employee_data["full_name"])
     if employee_data.get("employee_code"):
         buffer.set_config("employee_code", employee_data["employee_code"])
-    if employee_data.get("access_token"):
-        buffer.set_config("access_token", employee_data["access_token"])
 
     print("")
     print("=" * 50)
@@ -80,8 +76,7 @@ def run_first_launch(buffer: SQLiteBuffer, sender: APISender) -> bool:
     print("")
 
     logger.info(
-        f"First launch complete: employee_id={employee_id}, "
-        f"device={system_info.hostname}"
+        f"First launch complete: employee_id={employee_id}, " f"device={system_info.hostname}"
     )
     return True
 
@@ -103,52 +98,7 @@ def _prompt_employee_code() -> str | None:
     return None
 
 
-def _resolve_employee_code(sender: APISender, employee_code: str) -> int | None:
-    """Resolve employee code to employee ID using backend."""
-    try:
-        status, body = sender.get_immediate_raw(
-            f"/api/v1/employees/by-code/{employee_code}"
-        )
-        if status is None:
-            print("  Could not reach the server. Check your network.")
-            return None
-        if status == 401 or status == 403:
-            print(f"  Unauthorized (HTTP {status}). Check API key permissions.")
-            print(f"  Response: {body[:200]}")
-            return None
-        if status == 404:
-            print("  Employee not found.")
-            return None
-        if status < 200 or status >= 300:
-            print(f"  Employee lookup failed (HTTP {status}).")
-            print(f"  Response: {body[:200]}")
-            return None
-
-        # 2xx: try to parse JSON
-        try:
-            result = sender.get_immediate(f"/api/v1/employees/by-code/{employee_code}")
-        except Exception:
-            result = None
-        if result is None:
-            print("  Employee lookup failed (invalid JSON response).")
-            return None
-
-        if result.get("is_active") is False:
-            print("  Your account is inactive.")
-            return None
-
-        emp_id = result.get("id")
-        if not isinstance(emp_id, int):
-            print("  Employee not found.")
-            return None
-
-        return emp_id
-    except Exception as e:
-        print(f"  Employee lookup failed: {e}")
-        return None
-
-
-def _verify_login(sender: APISender, employee_id: int) -> dict | None:
+def _verify_login(sender: APISender, employee_code: str) -> dict | None:
     """Prompt for password and TOTP code, verify with backend via login."""
     for attempt in range(3):
         try:
@@ -168,10 +118,11 @@ def _verify_login(sender: APISender, employee_id: int) -> dict | None:
             result = sender.send_immediate(
                 "/api/v1/auth/login",
                 {
-                    "employee_id": employee_id,
+                    "employee_code": employee_code,
                     "password": password,
                     "totp_code": totp_code,
                 },
+                include_errors=True,
             )
 
             if result is None:
@@ -199,9 +150,7 @@ def _verify_login(sender: APISender, employee_id: int) -> dict | None:
     return None
 
 
-def _register_device(
-    sender: APISender, employee_id: int, system_info
-) -> bool:
+def _register_device(sender: APISender, employee_id: int, system_info) -> bool:
     """Register this device with the backend."""
     print("  Registering device...")
 
@@ -230,7 +179,8 @@ def _register_device(
 def _detect_device_type() -> str:
     """Detect if this is a laptop or desktop."""
     try:
-        import psutil # type: ignore
+        import psutil  # type: ignore
+
         battery = psutil.sensors_battery()
         if battery is not None:
             return "laptop"

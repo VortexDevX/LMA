@@ -7,8 +7,8 @@ macOS:    LaunchAgent plist in ~/Library/LaunchAgents/
 Linux:    .desktop file in ~/.config/autostart/
 """
 
-import sys
 import logging
+import sys
 from pathlib import Path
 
 logger = logging.getLogger("agent.utils.autostart")
@@ -126,12 +126,7 @@ def _check_windows() -> bool:
 
 
 def _get_plist_path() -> Path:
-    return (
-        Path.home()
-        / "Library"
-        / "LaunchAgents"
-        / "com.company.localmonitoragent.plist"
-    )
+    return Path.home() / "Library" / "LaunchAgents" / "com.company.localmonitoragent.plist"
 
 
 _PLIST_TEMPLATE = """\

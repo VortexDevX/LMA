@@ -4,17 +4,16 @@ Reads pending records from SQLite buffer and sends them to the backend API.
 Handles retries, backoff, network detection, auth cooldown, and error classification.
 """
 
-import time
-import threading
 import logging
 import socket
-from typing import Optional
+import threading
+import time
 from urllib.parse import urlparse
 
 import requests
 
 from src.config import config
-from src.storage.sqlite_buffer import SQLiteBuffer, VALID_TABLES
+from src.storage.sqlite_buffer import VALID_TABLES, SQLiteBuffer
 
 logger = logging.getLogger("agent.sender")
 MAX_DEBUG_TEXT_LEN = 400
@@ -46,13 +45,13 @@ class APISender:
 
         # Thread control
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
         # Stats
         self._total_sent = 0
         self._total_failed = 0
-        self._last_send_time: Optional[float] = None
-        self._last_error: Optional[str] = None
+        self._last_send_time: float | None = None
+        self._last_error: str | None = None
         self._consecutive_failures = 0
 
         # Auth cooldown: skip send cycles until this timestamp
@@ -179,9 +178,7 @@ class APISender:
                 break
 
         if total_sent > 0 or total_failed > 0:
-            logger.info(
-                f"Send cycle complete: {total_sent} sent, {total_failed} failed"
-            )
+            logger.info(f"Send cycle complete: {total_sent} sent, {total_failed} failed")
 
         # Track last successful sync
         if total_sent > 0:
@@ -190,9 +187,7 @@ class APISender:
                 time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             )
 
-    def _send_table_records(
-        self, table: str, retry: bool = False
-    ) -> tuple[int, int, bool]:
+    def _send_table_records(self, table: str, retry: bool = False) -> tuple[int, int, bool]:
         """
         Send records from a single table.
         Returns (sent_count, failed_count, auth_failed).
@@ -238,16 +233,16 @@ class APISender:
 
         # Batch update statuses
         if sent_ids:
-            self._buffer.mark_sent_batch(table, sent_ids) # type: ignore
+            self._buffer.mark_sent_batch(table, sent_ids)  # type: ignore
             self._total_sent += len(sent_ids)
             self._last_send_time = time.time()
 
         if perm_failed_ids:
-            self._buffer.mark_permanently_failed_batch(table, perm_failed_ids) # type: ignore
+            self._buffer.mark_permanently_failed_batch(table, perm_failed_ids)  # type: ignore
             self._total_failed += len(perm_failed_ids)
 
         if failed_ids:
-            self._buffer.mark_failed_batch(table, failed_ids) # type: ignore
+            self._buffer.mark_failed_batch(table, failed_ids)  # type: ignore
             self._total_failed += len(failed_ids)
 
         # Update consecutive failures / last error
@@ -409,19 +404,23 @@ class APISender:
             sock = socket.create_connection((host, port), timeout=3)
             sock.close()
             return True
-        except (socket.timeout, socket.error, OSError):
+        except (TimeoutError, OSError):
             return False
 
     # --------------------------------------------------
     # Manual send (for first launch, device registration, etc.)
     # --------------------------------------------------
 
-    def send_immediate(self, endpoint: str, payload: dict) -> Optional[dict]:
+    def send_immediate(
+        self, endpoint: str, payload: dict, *, include_errors: bool = False
+    ) -> dict | None:
         """
         Send a single request immediately (not buffered).
         Used for auth verification, device registration, etc.
 
-        Returns response JSON on success, None on failure.
+        Returns response JSON on success. When ``include_errors`` is true,
+        structured non-2xx JSON is returned with ``_http_status`` so login
+        screens can distinguish invalid credentials from network failures.
         """
         url = f"{self._base_url}{endpoint}"
 
@@ -442,6 +441,15 @@ class APISender:
                 f"Immediate send failed: {url} "
                 f"(HTTP {response.status_code}): {response.text[:200]}"
             )
+            if include_errors:
+                try:
+                    error = response.json()
+                except ValueError:
+                    error = {"detail": f"Request failed (HTTP {response.status_code})"}
+                if not isinstance(error, dict):
+                    error = {"detail": f"Request failed (HTTP {response.status_code})"}
+                error["_http_status"] = response.status_code
+                return error
             return None
 
         except requests.exceptions.Timeout:
@@ -454,7 +462,7 @@ class APISender:
             logger.error(f"Immediate send error: {e}")
             return None
 
-    def get_immediate(self, endpoint: str) -> Optional[dict]:
+    def get_immediate(self, endpoint: str) -> dict | None:
         """
         Send a GET request immediately.
         Used for config fetching, version checks, etc.
@@ -514,7 +522,9 @@ class APISender:
             "last_error": self._last_error,
             "consecutive_failures": self._consecutive_failures,
             "auth_cooldown": auth_cooldown_active,
-            "auth_cooldown_remaining": max(0, int(self._auth_cooldown_until - now)) if auth_cooldown_active else 0,
+            "auth_cooldown_remaining": (
+                max(0, int(self._auth_cooldown_until - now)) if auth_cooldown_active else 0
+            ),
             "network_available": self._is_network_available(),
             "pending_count": self._buffer.get_pending_count(),
         }

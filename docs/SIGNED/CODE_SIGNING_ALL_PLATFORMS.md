@@ -40,6 +40,7 @@ Get-AuthenticodeSignature "dist\LocalMonitorAgent.exe"
 ```
 
 **What it does**:
+
 - ✅ Code signs with Developer ID certificate
 - ✅ Notarizes with Apple (removes Gatekeeper warnings)
 - ✅ Staples notarization ticket
@@ -83,6 +84,7 @@ sudo chmod 755 /usr/local/bin/LocalMonitorAgent
 ```
 
 **What it does**:
+
 - ✅ Creates AppArmor profile (Ubuntu/Debian)
 - ✅ Creates SELinux policy (RHEL/Fedora)
 - ✅ Creates desktop entry file
@@ -105,25 +107,27 @@ ls ~/.config/autostart/LocalMonitorAgent.desktop
 
 ## 📊 Comparison
 
-| Feature | Windows | macOS | Linux |
-|---------|---------|-------|-------|
-| Remove Warnings | ✅ Commercial cert | ✅ Notarization | ✅ AppArmor/SELinux |
-| Cost | $150-400/year | Free (needs Apple ID) | Free |
-| Learning Curve | Easy | Medium | Medium |
-| Auto-start | Registry | LaunchAgent | Desktop Entry |
-| Distribution | .EXE | .APP | Binary + .desktop |
+| Feature         | Windows            | macOS                 | Linux               |
+| --------------- | ------------------ | --------------------- | ------------------- |
+| Remove Warnings | ✅ Commercial cert | ✅ Notarization       | ✅ AppArmor/SELinux |
+| Cost            | $150-400/year      | Free (needs Apple ID) | Free                |
+| Learning Curve  | Easy               | Medium                | Medium              |
+| Auto-start      | Registry           | LaunchAgent           | Desktop Entry       |
+| Distribution    | .EXE               | .APP                  | Binary + .desktop   |
 
 ---
 
 ## 📋 Checklist
 
 ### Windows
+
 - [ ] Run `create_certificate.ps1` (first time only)
 - [ ] Run `build_windows.bat`
 - [ ] Run `sign_windows.bat`
 - [ ] Verify with `Get-AuthenticodeSignature`
 
 ### macOS
+
 - [ ] Have Developer ID Certificate in Keychain
 - [ ] Have Apple ID + app-specific password
 - [ ] Run `build_macos.sh`
@@ -131,6 +135,7 @@ ls ~/.config/autostart/LocalMonitorAgent.desktop
 - [ ] Verify with `codesign` and `spctl`
 
 ### Linux
+
 - [ ] Run `build_linux.sh`
 - [ ] Run `sign_linux.sh`
 - [ ] Install to `/usr/local/bin/`
@@ -141,6 +146,7 @@ ls ~/.config/autostart/LocalMonitorAgent.desktop
 ## ✅ Status After Signing
 
 ### Windows
+
 ```
 Before: ⚠️  Unknown Publisher warning
 After:  ✓ Signed by [Your Name]
@@ -148,6 +154,7 @@ After:  ✓ Signed by [Your Name]
 ```
 
 ### macOS
+
 ```
 Before: ⚠️  "Cannot open" warning (Gatekeeper)
 After:  ✓ Opens without warnings
@@ -155,6 +162,7 @@ After:  ✓ Opens without warnings
 ```
 
 ### Linux
+
 ```
 Before: ❌ May need sudo to run
 After:  ✓ AppArmor/SELinux configured
@@ -169,19 +177,23 @@ After:  ✓ AppArmor/SELinux configured
 ### Windows
 
 **"SignTool not found"**
+
 - Install Windows SDK: https://developer.microsoft.com/windows/downloads/windows-sdk/
 
 **"Certificate password incorrect"**
+
 - Double-check password during certificate creation
 - Re-run `create_certificate.ps1` to make new certificate
 
 ### macOS
 
 **"Certificate not found"**
+
 - Import Developer ID Certificate in Keychain
 - Or create new at developer.apple.com
 
 **"Notarization failed"**
+
 - Verify Apple ID credentials
 - Check app-specific password (not regular password)
 - Check internet connection
@@ -189,10 +201,12 @@ After:  ✓ AppArmor/SELinux configured
 ### Linux
 
 **"AppArmor parser not found"**
+
 - Normal on systems without AppArmor
 - SELinux will be used instead
 
 **"Permission denied" when installing**
+
 - Use `sudo` for `/usr/local/bin/`
 - Don't use sudo for `~/.config/autostart/`
 
@@ -212,18 +226,21 @@ After:  ✓ AppArmor/SELinux configured
 Before deploying to users:
 
 ### Windows
+
 - [ ] Purchase code signing certificate from Sectigo/Digicert/etc
 - [ ] Code sign EXE with commercial certificate
 - [ ] Test on clean Windows machine (no warning)
 - [ ] Create .MSI installer (optional)
 
 ### macOS
+
 - [ ] Code sign with Developer ID
 - [ ] Notarize with Apple
 - [ ] Test on other Mac (no Gatekeeper warning)
 - [ ] Create .DMG for distribution (optional)
 
 ### Linux
+
 - [ ] Configure AppArmor/SELinux profiles
 - [ ] Test fine-grained permissions
 - [ ] Create GPG signature for distribution

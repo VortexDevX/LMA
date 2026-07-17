@@ -3,20 +3,19 @@ macOS-specific platform implementation.
 Uses subprocess calls to system utilities and psutil.
 """
 
-import subprocess
-import socket
 import logging
-import uuid
 import platform
 import re
-from typing import Optional
+import socket
+import subprocess
+import uuid
 
 import psutil
 
 from src.platform.base import (
-    PlatformBase,
     ForegroundAppInfo,
     NetworkConnection,
+    PlatformBase,
     SystemInfo,
 )
 
@@ -64,21 +63,22 @@ class MacOSPlatform(PlatformBase):
         """Check if pyobjc is available for native API access."""
         try:
             import AppKit  # type: ignore # noqa: F401
+
             return True
         except ImportError:
             return False
 
     # --- Foreground App ---
 
-    def get_foreground_app(self) -> Optional[ForegroundAppInfo]:
+    def get_foreground_app(self) -> ForegroundAppInfo | None:
         # Try pyobjc first (faster, more reliable)
         if self._has_pyobjc:
             return self._get_foreground_pyobjc()
         return self._get_foreground_osascript()
 
-    def _get_foreground_pyobjc(self) -> Optional[ForegroundAppInfo]:
+    def _get_foreground_pyobjc(self) -> ForegroundAppInfo | None:
         try:
-            from AppKit import NSWorkspace # type: ignore
+            from AppKit import NSWorkspace  # type: ignore
 
             workspace = NSWorkspace.sharedWorkspace()
             active_app = workspace.activeApplication()
@@ -98,7 +98,7 @@ class MacOSPlatform(PlatformBase):
             logger.debug(f"pyobjc foreground detection failed: {e}")
             return self._get_foreground_osascript()
 
-    def _get_foreground_osascript(self) -> Optional[ForegroundAppInfo]:
+    def _get_foreground_osascript(self) -> ForegroundAppInfo | None:
         try:
             script = (
                 'tell application "System Events" to get '
@@ -145,7 +145,7 @@ class MacOSPlatform(PlatformBase):
 
     def _get_idle_quartz(self) -> float:
         try:
-            from Quartz.CoreGraphics import CGEventSourceSecondsSinceLastEventType # type: ignore
+            from Quartz.CoreGraphics import CGEventSourceSecondsSinceLastEventType  # type: ignore
 
             # kCGEventSourceStateCombinedSessionState = 0
             # kCGAnyInputEventType = ~0 (all events)
@@ -184,7 +184,7 @@ class MacOSPlatform(PlatformBase):
     def is_screen_locked(self) -> bool:
         try:
             if self._has_pyobjc:
-                from Quartz import CGSessionCopyCurrentDictionary # type: ignore
+                from Quartz import CGSessionCopyCurrentDictionary  # type: ignore
 
                 session = CGSessionCopyCurrentDictionary()
                 if session:
@@ -193,9 +193,10 @@ class MacOSPlatform(PlatformBase):
             # Fallback: check if loginwindow is in front
             result = subprocess.run(
                 [
-                    "python3", "-c",
+                    "python3",
+                    "-c",
                     "import Quartz; d=Quartz.CGSessionCopyCurrentDictionary(); "
-                    "print(d.get('CGSSessionScreenIsLocked', False) if d else False)"
+                    "print(d.get('CGSSessionScreenIsLocked', False) if d else False)",
                 ],
                 capture_output=True,
                 text=True,
@@ -232,9 +233,7 @@ class MacOSPlatform(PlatformBase):
 
             # Fallback to uuid method
             mac_int = uuid.getnode()
-            return ":".join(
-                ["{:02x}".format((mac_int >> i) & 0xFF) for i in range(0, 48, 8)][::-1]
-            )
+            return ":".join([f"{(mac_int >> i) & 0xFF:02x}" for i in range(0, 48, 8)][::-1])
         except Exception:
             return "00:00:00:00:00:00"
 
@@ -302,7 +301,7 @@ class MacOSPlatform(PlatformBase):
 
     # --- Process Utilities ---
 
-    def get_process_name(self, pid: int) -> Optional[str]:
+    def get_process_name(self, pid: int) -> str | None:
         if pid in self._process_cache:
             return self._process_cache[pid]
 

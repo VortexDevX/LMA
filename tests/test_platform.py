@@ -4,11 +4,11 @@ Run with: python -m pytest tests/test_platform.py -v
 """
 
 import sys
-import pytest
-from unittest.mock import patch, MagicMock
 
-from src.platform.base import ForegroundAppInfo, NetworkConnection, SystemInfo
+import pytest
+
 from src.platform import get_platform
+from src.platform.base import ForegroundAppInfo, NetworkConnection, SystemInfo
 
 
 class TestPlatformFactory:

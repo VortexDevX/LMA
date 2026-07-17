@@ -3,9 +3,7 @@ Tests for packaging verification.
 Run with: python -m pytest tests/test_packaging.py -v
 """
 
-import sys
 from pathlib import Path
-import pytest
 
 from src.config import config
 
@@ -29,6 +27,7 @@ class TestBundledResources:
 
     def test_main_has_main_function(self):
         from src.main import main
+
         assert callable(main)
 
 
@@ -76,68 +75,95 @@ class TestBuildScripts:
         spec = Path(__file__).parent.parent / "local-monitor-agent.spec"
         assert spec.exists()
 
+    def test_pyinstaller_spec_does_not_bundle_environment_secrets(self):
+        spec = (Path(__file__).parent.parent / "local-monitor-agent.spec").read_text(
+            encoding="utf-8"
+        )
+        assert 'PROJECT_ROOT / ".env"' not in spec
+
+    def test_ci_build_does_not_materialize_environment_secrets(self):
+        workflow = (
+            Path(__file__).parent.parent / ".github" / "workflows" / "build.yml"
+        ).read_text(encoding="utf-8")
+        assert "secrets.ENV_FILE" not in workflow
+
 
 class TestPyInstallerImports:
     """Verify PyInstaller can import all modules."""
 
     def test_import_main(self):
         from src import main
+
         assert main is not None
 
     def test_import_agent_core(self):
         from src import agent_core
+
         assert agent_core is not None
 
     def test_import_config(self):
         from src import config
+
         assert config is not None
 
     def test_import_platform(self):
         from src.platform import get_platform
+
         assert callable(get_platform)
 
     def test_import_collectors(self):
         from src.collectors.app_collector import AppCollector
         from src.collectors.network_collector import NetworkCollector
+
         assert AppCollector is not None
         assert NetworkCollector is not None
 
     def test_import_categorizer(self):
         from src.categorization.categorizer import Categorizer
+
         assert Categorizer is not None
 
     def test_import_session_manager(self):
         from src.session.session_manager import SessionManager
+
         assert SessionManager is not None
 
     def test_import_sqlite_buffer(self):
         from src.storage.sqlite_buffer import SQLiteBuffer
+
         assert SQLiteBuffer is not None
 
     def test_import_api_sender(self):
         from src.network.api_sender import APISender
+
         assert APISender is not None
 
     def test_import_first_launch(self):
-       from src.setup.first_launch import run_first_launch
-       assert callable(run_first_launch)
+        from src.setup.first_launch import run_first_launch
+
+        assert callable(run_first_launch)
 
     def test_import_tray(self):
         from src.ui.tray import SystemTray
+
         assert SystemTray is not None
 
     def test_import_pystray(self):
         import pystray
+
         assert pystray is not None
 
     def test_import_pillow(self):
         from PIL import Image
+
         assert Image is not None
 
     def test_import_psutil(self):
         import psutil
+
         assert psutil is not None
 
     def test_import_requests(self):
         import requests
+
         assert requests is not None

@@ -71,9 +71,7 @@
       "epicgameslauncher",
       "battle.net"
     ],
-    "social": [
-      "tweetdeck"
-    ],
+    "social": ["tweetdeck"],
     "browsers": [
       "chrome",
       "google chrome",

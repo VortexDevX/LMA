@@ -3,23 +3,23 @@ Tests for the Agent Core and First Launch.
 Run with: python -m pytest tests/test_agent_core.py -v
 """
 
-import time
 import threading
+import time
+from unittest.mock import MagicMock, patch
+
 import pytest  # type: ignore
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 from src.agent_core import AgentCore
-from src.storage.sqlite_buffer import SQLiteBuffer
+from src.config import config as agent_config
 from src.network.api_sender import APISender
-from src.setup.first_launch import (
-    _prompt_employee_code,
-    _resolve_employee_code,
-    _verify_login,
-    _register_device,
-    _detect_device_type,
-)
 from src.platform.base import SystemInfo
+from src.setup.first_launch import (
+    _detect_device_type,
+    _prompt_employee_code,
+    _register_device,
+    _verify_login,
+)
+from src.storage.sqlite_buffer import SQLiteBuffer
 
 
 @pytest.fixture
@@ -59,7 +59,7 @@ class TestAgentCoreInit:
         agent = AgentCore()
         status = agent.get_status()
         assert status["running"] is False
-        assert status["agent_version"] == "1.0.0"
+        assert status["agent_version"] == agent_config.AGENT_VERSION
 
 
 class TestFirstLaunchPrompts:
@@ -101,7 +101,7 @@ class TestLoginVerification:
                 "full_name": "Test User",
             },
         ):
-            result = _verify_login(sender, employee_id=1)
+            result = _verify_login(sender, employee_code="EMP001")
             assert result is not None
             assert result["access_token"] == "tok_abc123"
             assert result["full_name"] == "Test User"
@@ -114,39 +114,21 @@ class TestLoginVerification:
             "send_immediate",
             return_value={"detail": "Invalid credentials"},
         ):
-            result = _verify_login(sender, employee_id=1)
+            result = _verify_login(sender, employee_code="EMP001")
             assert result is None
 
     @patch("builtins.input", return_value="123456")
     @patch("src.setup.first_launch.getpass.getpass", return_value="password123")
     def test_verify_login_network_error(self, mock_getpass, mock_input, sender):
         with patch.object(sender, "send_immediate", return_value=None):
-            result = _verify_login(sender, employee_id=1)
+            result = _verify_login(sender, employee_code="EMP001")
             assert result is None
 
     @patch("src.setup.first_launch.getpass.getpass", side_effect=KeyboardInterrupt)
     def test_verify_login_keyboard_interrupt(self, mock_getpass, sender):
-        result = _verify_login(sender, employee_id=1)
+        result = _verify_login(sender, employee_code="EMP001")
         assert result is None
 
-
-class TestEmployeeCodeResolution:
-    """Test employee code resolution flow."""
-
-    def test_resolve_employee_code_success(self, sender):
-        with patch.object(sender, "get_immediate", return_value={"id": 42, "is_active": True}):
-            emp_id = _resolve_employee_code(sender, "EMP042")
-            assert emp_id == 42
-
-    def test_resolve_employee_code_inactive(self, sender):
-        with patch.object(sender, "get_immediate", return_value={"id": 42, "is_active": False}):
-            emp_id = _resolve_employee_code(sender, "EMP042")
-            assert emp_id is None
-
-    def test_resolve_employee_code_not_found(self, sender):
-        with patch.object(sender, "get_immediate", return_value={"detail": "not found"}):
-            emp_id = _resolve_employee_code(sender, "EMP999")
-            assert emp_id is None
 
 class TestDeviceRegistration:
     """Test device registration."""
@@ -212,17 +194,13 @@ class TestAgentCoreWithMockSetup:
 
         agent = AgentCore()
 
-        with patch.object(
-            agent, "_check_single_instance"
-        ), patch(
-            "src.agent_core.config"
-        ) as mock_config, patch(
-            "src.agent_core.SQLiteBuffer"
-        ) as MockBuffer, patch(
-            "src.agent_core.APISender"
-        ) as MockSender, patch(
-            "src.agent_core.SessionManager"
-        ) as MockSession:
+        with (
+            patch.object(agent, "_check_single_instance"),
+            patch("src.agent_core.config") as mock_config,
+            patch("src.agent_core.SQLiteBuffer") as mock_buffer,
+            patch("src.agent_core.APISender") as mock_sender,
+            patch("src.agent_core.SessionManager") as mock_session,
+        ):
 
             mock_config.LOG_DIR = tmp_path
             mock_config.LOG_LEVEL = "WARNING"
@@ -237,16 +215,16 @@ class TestAgentCoreWithMockSetup:
             mock_buffer_instance.get_pending_count.return_value = 0
             mock_buffer_instance.get_config.return_value = None
             mock_buffer_instance.get_stats.return_value = {}
-            MockBuffer.return_value = mock_buffer_instance
+            mock_buffer.return_value = mock_buffer_instance
 
             mock_sender_instance = MagicMock()
-            MockSender.return_value = mock_sender_instance
+            mock_sender.return_value = mock_sender_instance
 
             mock_session_instance = MagicMock()
             mock_session_instance.is_configured = True
             mock_session_instance.employee_id = 1
             mock_session_instance.device_mac = "aa:bb:cc:dd:ee:ff"
-            MockSession.return_value = mock_session_instance
+            mock_session.return_value = mock_session_instance
 
             def stop_agent():
                 time.sleep(1)

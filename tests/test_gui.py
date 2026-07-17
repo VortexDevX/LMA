@@ -3,14 +3,12 @@ Tests for Phase 15: GUI Enhancement.
 Covers setup wizard module, agent core GUI fallback, and tray employee display.
 """
 
-import sys
-import pytest # type: ignore
-from unittest.mock import patch, MagicMock, PropertyMock
-
+from unittest.mock import MagicMock, patch
 
 # ============================================================
 # Setup wizard module tests
 # ============================================================
+
 
 class TestSetupWizardModule:
     """Basic tests for the setup_wizard module."""
@@ -57,8 +55,10 @@ class TestSetupWizardModule:
         """If wizard crashes on launch, returns False instead of raising."""
         from src.ui import setup_wizard
 
-        with patch.object(setup_wizard, "_TK_AVAILABLE", True), \
-             patch.object(setup_wizard, "SetupWizard", side_effect=RuntimeError("boom")):
+        with (
+            patch.object(setup_wizard, "_TK_AVAILABLE", True),
+            patch.object(setup_wizard, "SetupWizard", side_effect=RuntimeError("boom")),
+        ):
             result = setup_wizard.run_setup_wizard(MagicMock(), MagicMock())
             assert result is False
 
@@ -66,6 +66,7 @@ class TestSetupWizardModule:
 # ============================================================
 # Wizard login logic tests (no GUI)
 # ============================================================
+
 
 class TestWizardLoginLogic:
     """Test the _do_login method directly (mocked Tk root)."""
@@ -100,6 +101,7 @@ class TestWizardLoginLogic:
             # Login response
             {
                 "access_token": "tok_abc",
+                "employee_id": 1,
                 "full_name": "Test User",
                 "employee_code": "EMP001",
             },
@@ -113,23 +115,26 @@ class TestWizardLoginLogic:
         wizard._buffer.set_config.assert_any_call("employee_id", "1")
         wizard._buffer.set_config.assert_any_call("device_mac", "aa:bb:cc:dd:ee:ff")
         wizard._buffer.set_config.assert_any_call("employee_name", "Test User")
-        wizard._buffer.set_config.assert_any_call("access_token", "tok_abc")
+        assert not any(
+            recorded.args and recorded.args[0] == "access_token"
+            for recorded in wizard._buffer.set_config.call_args_list
+        )
 
         # Should schedule success callback on main thread
-        wizard._root.after.assert_called() # type: ignore
-        call_args = wizard._root.after.call_args_list[-1] # type: ignore
+        wizard._root.after.assert_called()  # type: ignore
+        call_args = wizard._root.after.call_args_list[-1]  # type: ignore
         assert call_args[0][0] == 0  # schedule immediately
 
     def test_do_login_network_error(self):
         wizard = self._make_wizard()
 
-        wizard._sender.get_immediate.return_value = None  # Network failure
+        wizard._sender.send_immediate.return_value = None  # Network failure
 
         wizard._do_login("EMP001", "password", "123456")
 
         # Should schedule error callback
-        wizard._root.after.assert_called() # type: ignore
-        call_args = wizard._root.after.call_args_list[-1] # type: ignore
+        wizard._root.after.assert_called()  # type: ignore
+        call_args = wizard._root.after.call_args_list[-1]  # type: ignore
         assert call_args[0][0] == 0
         # Error message should mention server/network
         error_msg = call_args[0][2]
@@ -138,27 +143,24 @@ class TestWizardLoginLogic:
     def test_do_login_employee_inactive(self):
         wizard = self._make_wizard()
 
-        wizard._sender.get_immediate.return_value = {"id": 1, "is_active": False}
+        wizard._sender.send_immediate.return_value = {"detail": "Your account is inactive."}
 
         wizard._do_login("EMP001", "password", "123456")
 
-        wizard._root.after.assert_called() # type: ignore
-        call_args = wizard._root.after.call_args_list[-1] # type: ignore
+        wizard._root.after.assert_called()  # type: ignore
+        call_args = wizard._root.after.call_args_list[-1]  # type: ignore
         error_msg = call_args[0][2]
         assert "inactive" in error_msg.lower()
 
     def test_do_login_invalid_credentials(self):
         wizard = self._make_wizard()
 
-        wizard._sender.get_immediate.return_value = {"id": 1, "is_active": True}
-        wizard._sender.send_immediate.return_value = {
-            "detail": "Invalid password"
-        }
+        wizard._sender.send_immediate.return_value = {"detail": "Invalid password"}
 
         wizard._do_login("EMP001", "wrong", "123456")
 
-        wizard._root.after.assert_called() # type: ignore
-        call_args = wizard._root.after.call_args_list[-1] # type: ignore
+        wizard._root.after.assert_called()  # type: ignore
+        call_args = wizard._root.after.call_args_list[-1]  # type: ignore
         error_msg = call_args[0][2]
         assert "Invalid password" in error_msg
 
@@ -166,9 +168,8 @@ class TestWizardLoginLogic:
         """Device reg failure should not prevent setup completion."""
         wizard = self._make_wizard()
 
-        wizard._sender.get_immediate.return_value = {"id": 1, "is_active": True}
         wizard._sender.send_immediate.side_effect = [
-            {"access_token": "tok", "full_name": "User"},  # Login OK
+            {"access_token": "tok", "employee_id": 1, "full_name": "User"},  # Login OK
             None,  # Device registration fails
         ]
 
@@ -177,7 +178,7 @@ class TestWizardLoginLogic:
         # Should still save identity and call success
         wizard._buffer.set_config.assert_any_call("employee_id", "1")
         # Last after() call should be success, not error
-        last_call = wizard._root.after.call_args_list[-1] # type: ignore
+        last_call = wizard._root.after.call_args_list[-1]  # type: ignore
         callback = last_call[0][1]
         assert callback == wizard._on_login_success
 
@@ -185,6 +186,7 @@ class TestWizardLoginLogic:
 # ============================================================
 # Agent core GUI fallback tests
 # ============================================================
+
 
 class TestAgentCoreGUIFallback:
     """Test _ensure_configured GUI vs CLI selection."""
@@ -211,10 +213,12 @@ class TestAgentCoreGUIFallback:
         mock_stdin = MagicMock()
         mock_stdin.isatty.return_value = True
 
-        with patch("sys.stdin", mock_stdin), \
-             patch("src.agent_core.run_first_launch", return_value=True) as mock_cli, \
-             patch("src.agent_core.SessionManager", return_value=new_sm), \
-             patch("src.agent_core.register_autostart", return_value=False):
+        with (
+            patch("sys.stdin", mock_stdin),
+            patch("src.agent_core.run_first_launch", return_value=True) as mock_cli,
+            patch("src.agent_core.SessionManager", return_value=new_sm),
+            patch("src.agent_core.register_autostart", return_value=False),
+        ):
             result = agent._ensure_configured()
 
         assert result is True
@@ -226,10 +230,12 @@ class TestAgentCoreGUIFallback:
         new_sm = MagicMock()
         new_sm.is_configured = True
 
-        with patch("sys.stdin", None), \
-             patch("src.ui.setup_wizard.is_tk_available", return_value=True), \
-             patch("src.ui.setup_wizard.run_setup_wizard", return_value=True) as mock_wiz, \
-             patch("src.agent_core.SessionManager", return_value=new_sm):
+        with (
+            patch("sys.stdin", None),
+            patch("src.ui.setup_wizard.is_tk_available", return_value=True),
+            patch("src.ui.setup_wizard.run_setup_wizard", return_value=True) as mock_wiz,
+            patch("src.agent_core.SessionManager", return_value=new_sm),
+        ):
             result = agent._ensure_configured()
 
         assert result is True
@@ -238,8 +244,10 @@ class TestAgentCoreGUIFallback:
     def test_fails_when_no_terminal_no_gui(self):
         agent = self._make_agent()
 
-        with patch("sys.stdin", None), \
-             patch("src.ui.setup_wizard.is_tk_available", return_value=False):
+        with (
+            patch("sys.stdin", None),
+            patch("src.ui.setup_wizard.is_tk_available", return_value=False),
+        ):
             result = agent._ensure_configured()
 
         assert result is False
@@ -247,9 +255,11 @@ class TestAgentCoreGUIFallback:
     def test_gui_wizard_failure_returns_false(self):
         agent = self._make_agent()
 
-        with patch("sys.stdin", None), \
-             patch("src.ui.setup_wizard.is_tk_available", return_value=True), \
-             patch("src.ui.setup_wizard.run_setup_wizard", return_value=False):
+        with (
+            patch("sys.stdin", None),
+            patch("src.ui.setup_wizard.is_tk_available", return_value=True),
+            patch("src.ui.setup_wizard.run_setup_wizard", return_value=False),
+        ):
             result = agent._ensure_configured()
 
         assert result is False
@@ -263,10 +273,12 @@ class TestAgentCoreGUIFallback:
         mock_stdin = MagicMock()
         mock_stdin.isatty.return_value = True
 
-        with patch("sys.stdin", mock_stdin), \
-             patch("src.agent_core.run_first_launch", return_value=True), \
-             patch("src.agent_core.SessionManager", return_value=new_sm), \
-             patch("src.agent_core.register_autostart", return_value=True) as mock_auto:
+        with (
+            patch("sys.stdin", mock_stdin),
+            patch("src.agent_core.run_first_launch", return_value=True),
+            patch("src.agent_core.SessionManager", return_value=new_sm),
+            patch("src.agent_core.register_autostart", return_value=True) as mock_auto,
+        ):
             agent._ensure_configured()
 
         mock_auto.assert_called_once()
@@ -278,11 +290,13 @@ class TestAgentCoreGUIFallback:
         new_sm = MagicMock()
         new_sm.is_configured = True
 
-        with patch("sys.stdin", None), \
-             patch("src.ui.setup_wizard.is_tk_available", return_value=True), \
-             patch("src.ui.setup_wizard.run_setup_wizard", return_value=True), \
-             patch("src.agent_core.SessionManager", return_value=new_sm), \
-             patch("src.agent_core.register_autostart") as mock_auto:
+        with (
+            patch("sys.stdin", None),
+            patch("src.ui.setup_wizard.is_tk_available", return_value=True),
+            patch("src.ui.setup_wizard.run_setup_wizard", return_value=True),
+            patch("src.agent_core.SessionManager", return_value=new_sm),
+            patch("src.agent_core.register_autostart") as mock_auto,
+        ):
             agent._ensure_configured()
 
         mock_auto.assert_not_called()
@@ -291,6 +305,7 @@ class TestAgentCoreGUIFallback:
 # ============================================================
 # Status dict employee_name tests
 # ============================================================
+
 
 class TestStatusEmployeeName:
     """Test that get_status includes employee_name from buffer."""
@@ -337,6 +352,7 @@ class TestStatusEmployeeName:
 # ============================================================
 # Tray employee text tests
 # ============================================================
+
 
 class TestTrayEmployeeText:
     """Test tray menu employee text generation."""

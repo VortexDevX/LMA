@@ -4,8 +4,8 @@ Run with: python -m pytest tests/test_app_collector.py -v
 """
 
 import time
+
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
 
 from src.collectors.app_collector import AppCollector, AppRecord
 from src.platform.base import ForegroundAppInfo
@@ -40,7 +40,13 @@ class TestAppRecord:
     def test_to_dict_has_all_required_fields(self):
         record = AppRecord(app_name="Test", process_id=1)
         d = record.to_dict()
-        required = {"app_name", "process_id", "active_duration_sec", "idle_duration_sec", "switch_count"}
+        required = {
+            "app_name",
+            "process_id",
+            "active_duration_sec",
+            "idle_duration_sec",
+            "switch_count",
+        }
         assert set(d.keys()) == required
 
 
@@ -162,5 +168,3 @@ class TestAppCollectorIgnored:
             raw_process_name="chrome.exe",
         )
         assert collector._is_ignored(fg) is False
-
-    

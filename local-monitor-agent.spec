@@ -8,10 +8,13 @@ Usage:
 
 import sys
 import os
+import tomllib
 from pathlib import Path
 
 # Project root
 PROJECT_ROOT = Path(SPECPATH)
+with (PROJECT_ROOT / "pyproject.toml").open("rb") as project_file:
+    APP_VERSION = tomllib.load(project_file)["project"]["version"]
 
 # Platform detection
 IS_WINDOWS = sys.platform == "win32"
@@ -32,7 +35,6 @@ block_cipher = None
 datas = [
     (str(PROJECT_ROOT / "data" / "categories.json"), "data"),
     (str(PROJECT_ROOT / "assets" / "icon.png"), "assets"),
-    (str(PROJECT_ROOT / ".env"), "."),
 ]
 
 # Add .ico for Windows wizard window icon
@@ -187,8 +189,8 @@ elif IS_MACOS:
         info_plist={
             "CFBundleName": "Local Monitor Agent",
             "CFBundleDisplayName": "Local Monitor Agent",
-            "CFBundleVersion": "1.0.0",
-            "CFBundleShortVersionString": "1.0.0",
+            "CFBundleVersion": APP_VERSION,
+            "CFBundleShortVersionString": APP_VERSION,
             "LSBackgroundOnly": False,
             "LSUIElement": True,
             "NSHighResolutionCapable": True,

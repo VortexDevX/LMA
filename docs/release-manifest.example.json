@@ -1,0 +1,7 @@
+{
+  "version": "1.0.3",
+  "download_url": "https://downloads.example.com/LocalMonitorAgent_v1.0.3.exe",
+  "checksum": "0000000000000000000000000000000000000000000000000000000000000000",
+  "release_notes": "Security and stability fixes.",
+  "mandatory": false
+}

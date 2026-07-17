@@ -3,13 +3,15 @@
 ## ✅ Issues Fixed
 
 ### 1. **Console Window Closing Issue** - FIXED ✓
+
 **Problem**: EXE was opening a terminal window  
 **Cause**: `console=True` in PyInstaller spec file  
-**Solution**: Changed to `console=False` in `local-monitor-agent.spec`  
+**Solution**: Changed to `console=False` in `local-monitor-agent.spec`
 
 **File Updated**: `local-monitor-agent.spec` (line 99)
 
 Now when you run the EXE, it will:
+
 - Start silently in the background
 - Show only the system tray icon
 - NOT display any console window
@@ -19,12 +21,14 @@ Now when you run the EXE, it will:
 ### 2. **Code Signing** - READY TO USE ✓
 
 The app is **not currently signed**, which means:
+
 - ✗ Windows may show "Unknown Publisher" warning
 - ✗ macOS may prevent execution (needs override)
 
 #### Quick Setup (Windows)
 
 **Step 1: Create a Self-Signed Certificate (in PowerShell as Admin)**
+
 ```powershell
 $cert = New-SelfSignedCertificate -Type CodeSigningCert `
   -Subject "CN=Local Monitor Agent" `
@@ -38,11 +42,13 @@ Export-PfxCertificate -Cert $cert -FilePath "lma_cert.pfx" -Password $password
 ```
 
 **Step 2: Build Executable**
+
 ```bash
 scripts/build_windows.bat
 ```
 
 **Step 3: Sign the Executable**
+
 ```bash
 scripts/sign_windows.bat
 ```
@@ -50,6 +56,7 @@ scripts/sign_windows.bat
 #### For Production (Trusted Certificate)
 
 For deployment WITHOUT warnings, purchase a code signing certificate from:
+
 - **Sectigo** (~$150/year): https://sectigo.com/ssl-certificates-tls/code-signing
 - **Digicert** (~$300/year): https://www.digicert.com/code-signing
 
@@ -68,12 +75,15 @@ Then use the same signing script with the commercial certificate.
 ## 🚀 Quick Start (After Changes)
 
 ### Build Without Signing
+
 ```bash
 scripts/build_windows.bat
 ```
+
 Result: `dist/LocalMonitorAgent.exe` (no console window ✓)
 
 ### Build & Sign (with self-signed cert)
+
 ```bash
 # First time setup: Create certificate (PowerShell as Admin)
 $cert = New-SelfSignedCertificate -Type CodeSigningCert `
@@ -95,6 +105,7 @@ scripts/sign_windows.bat
 ## ✅ What's Changed
 
 ### `local-monitor-agent.spec`
+
 ```python
 # Before:
 console=True  # ← Shows console window
@@ -104,10 +115,12 @@ console=False  # ← No console window, silent background launch
 ```
 
 ### New Scripts Added
+
 - `scripts/sign_windows.bat` - Signs EXE with certificate
 - `scripts/sign_macos.sh` - Signs macOS app bundle
 
 ### Documentation
+
 - `docs/CODE_SIGNING.md` - Full guide for:
   - Self-signed certificates (testing)
   - Commercial certificates (production)
@@ -122,12 +135,14 @@ console=False  # ← No console window, silent background launch
 After building and signing:
 
 **Windows (PowerShell)**:
+
 ```powershell
 Get-AuthenticodeSignature "dist\LocalMonitorAgent.exe"
 # Should show: Status : Valid
 ```
 
 **macOS (Terminal)**:
+
 ```bash
 codesign --verify --verbose "dist/LocalMonitorAgent.app"
 # Should show: valid on disk

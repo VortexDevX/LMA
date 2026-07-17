@@ -3,10 +3,7 @@ Tests for auto-start management module.
 """
 
 import sys
-import pytest # type: ignore
-from unittest.mock import patch, MagicMock, call
-from pathlib import Path
-
+from unittest.mock import MagicMock, patch
 
 # ── get_exe_path ─────────────────────────────────────────
 
@@ -34,16 +31,20 @@ class TestWindowsRegister:
     @patch("src.utils.autostart.get_exe_path", return_value=r"C:\Agent\Agent.exe")
     def test_register_success(self, mock_exe):
         mock_key = MagicMock()
-        with patch("winreg.OpenKey", return_value=mock_key) as mock_open, \
-             patch("winreg.SetValueEx") as mock_set, \
-             patch("winreg.CloseKey") as mock_close:
+        with (
+            patch("winreg.OpenKey", return_value=mock_key),
+            patch("winreg.SetValueEx") as mock_set,
+            patch("winreg.CloseKey") as mock_close,
+        ):
             from src.utils.autostart import _register_windows
 
             result = _register_windows()
 
             assert result is True
             mock_set.assert_called_once_with(
-                mock_key, "LocalMonitorAgent", 0,
+                mock_key,
+                "LocalMonitorAgent",
+                0,
                 1,  # REG_SZ
                 '"C:\\Agent\\Agent.exe"',
             )
@@ -68,9 +69,11 @@ class TestWindowsRegister:
 class TestWindowsUnregister:
     def test_unregister_success(self):
         mock_key = MagicMock()
-        with patch("winreg.OpenKey", return_value=mock_key), \
-             patch("winreg.DeleteValue") as mock_del, \
-             patch("winreg.CloseKey"):
+        with (
+            patch("winreg.OpenKey", return_value=mock_key),
+            patch("winreg.DeleteValue") as mock_del,
+            patch("winreg.CloseKey"),
+        ):
             from src.utils.autostart import _unregister_windows
 
             result = _unregister_windows()
@@ -80,9 +83,11 @@ class TestWindowsUnregister:
 
     def test_unregister_not_found(self):
         mock_key = MagicMock()
-        with patch("winreg.OpenKey", return_value=mock_key), \
-             patch("winreg.DeleteValue", side_effect=FileNotFoundError), \
-             patch("winreg.CloseKey"):
+        with (
+            patch("winreg.OpenKey", return_value=mock_key),
+            patch("winreg.DeleteValue", side_effect=FileNotFoundError),
+            patch("winreg.CloseKey"),
+        ):
             from src.utils.autostart import _unregister_windows
 
             result = _unregister_windows()
@@ -99,18 +104,22 @@ class TestWindowsUnregister:
 class TestWindowsCheck:
     def test_check_enabled(self):
         mock_key = MagicMock()
-        with patch("winreg.OpenKey", return_value=mock_key), \
-             patch("winreg.QueryValueEx", return_value=(r'"C:\Agent\Agent.exe"', 1)), \
-             patch("winreg.CloseKey"):
+        with (
+            patch("winreg.OpenKey", return_value=mock_key),
+            patch("winreg.QueryValueEx", return_value=(r'"C:\Agent\Agent.exe"', 1)),
+            patch("winreg.CloseKey"),
+        ):
             from src.utils.autostart import _check_windows
 
             assert _check_windows() is True
 
     def test_check_not_found(self):
         mock_key = MagicMock()
-        with patch("winreg.OpenKey", return_value=mock_key), \
-             patch("winreg.QueryValueEx", side_effect=FileNotFoundError), \
-             patch("winreg.CloseKey"):
+        with (
+            patch("winreg.OpenKey", return_value=mock_key),
+            patch("winreg.QueryValueEx", side_effect=FileNotFoundError),
+            patch("winreg.CloseKey"),
+        ):
             from src.utils.autostart import _check_windows
 
             assert _check_windows() is False
@@ -129,9 +138,7 @@ class TestMacOSAutostart:
     @patch("src.utils.autostart.get_exe_path", return_value="/app/Agent")
     def test_register_writes_plist(self, mock_exe, tmp_path, monkeypatch):
         plist_path = tmp_path / "com.company.localmonitoragent.plist"
-        monkeypatch.setattr(
-            "src.utils.autostart._get_plist_path", lambda: plist_path
-        )
+        monkeypatch.setattr("src.utils.autostart._get_plist_path", lambda: plist_path)
         from src.utils.autostart import _register_macos
 
         result = _register_macos()
@@ -151,9 +158,7 @@ class TestMacOSAutostart:
     def test_unregister_removes_plist(self, tmp_path, monkeypatch):
         plist_path = tmp_path / "com.company.localmonitoragent.plist"
         plist_path.write_text("plist content")
-        monkeypatch.setattr(
-            "src.utils.autostart._get_plist_path", lambda: plist_path
-        )
+        monkeypatch.setattr("src.utils.autostart._get_plist_path", lambda: plist_path)
         from src.utils.autostart import _unregister_macos
 
         result = _unregister_macos()
@@ -163,9 +168,7 @@ class TestMacOSAutostart:
 
     def test_unregister_missing_file(self, tmp_path, monkeypatch):
         plist_path = tmp_path / "nonexistent.plist"
-        monkeypatch.setattr(
-            "src.utils.autostart._get_plist_path", lambda: plist_path
-        )
+        monkeypatch.setattr("src.utils.autostart._get_plist_path", lambda: plist_path)
         from src.utils.autostart import _unregister_macos
 
         assert _unregister_macos() is True
@@ -173,18 +176,14 @@ class TestMacOSAutostart:
     def test_check_enabled(self, tmp_path, monkeypatch):
         plist_path = tmp_path / "com.company.localmonitoragent.plist"
         plist_path.write_text("plist content")
-        monkeypatch.setattr(
-            "src.utils.autostart._get_plist_path", lambda: plist_path
-        )
+        monkeypatch.setattr("src.utils.autostart._get_plist_path", lambda: plist_path)
         from src.utils.autostart import _check_macos
 
         assert _check_macos() is True
 
     def test_check_disabled(self, tmp_path, monkeypatch):
         plist_path = tmp_path / "nonexistent.plist"
-        monkeypatch.setattr(
-            "src.utils.autostart._get_plist_path", lambda: plist_path
-        )
+        monkeypatch.setattr("src.utils.autostart._get_plist_path", lambda: plist_path)
         from src.utils.autostart import _check_macos
 
         assert _check_macos() is False
@@ -197,9 +196,7 @@ class TestLinuxAutostart:
     @patch("src.utils.autostart.get_exe_path", return_value="/opt/agent/Agent")
     def test_register_writes_desktop(self, mock_exe, tmp_path, monkeypatch):
         desktop_path = tmp_path / "localmonitoragent.desktop"
-        monkeypatch.setattr(
-            "src.utils.autostart._get_desktop_path", lambda: desktop_path
-        )
+        monkeypatch.setattr("src.utils.autostart._get_desktop_path", lambda: desktop_path)
         from src.utils.autostart import _register_linux
 
         result = _register_linux()
@@ -219,9 +216,7 @@ class TestLinuxAutostart:
     def test_unregister_removes_desktop(self, tmp_path, monkeypatch):
         desktop_path = tmp_path / "localmonitoragent.desktop"
         desktop_path.write_text("desktop content")
-        monkeypatch.setattr(
-            "src.utils.autostart._get_desktop_path", lambda: desktop_path
-        )
+        monkeypatch.setattr("src.utils.autostart._get_desktop_path", lambda: desktop_path)
         from src.utils.autostart import _unregister_linux
 
         result = _unregister_linux()
@@ -232,18 +227,14 @@ class TestLinuxAutostart:
     def test_check_enabled(self, tmp_path, monkeypatch):
         desktop_path = tmp_path / "localmonitoragent.desktop"
         desktop_path.write_text("desktop content")
-        monkeypatch.setattr(
-            "src.utils.autostart._get_desktop_path", lambda: desktop_path
-        )
+        monkeypatch.setattr("src.utils.autostart._get_desktop_path", lambda: desktop_path)
         from src.utils.autostart import _check_linux
 
         assert _check_linux() is True
 
     def test_check_disabled(self, tmp_path, monkeypatch):
         desktop_path = tmp_path / "nonexistent.desktop"
-        monkeypatch.setattr(
-            "src.utils.autostart._get_desktop_path", lambda: desktop_path
-        )
+        monkeypatch.setattr("src.utils.autostart._get_desktop_path", lambda: desktop_path)
         from src.utils.autostart import _check_linux
 
         assert _check_linux() is False

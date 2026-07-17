@@ -5,35 +5,37 @@ Each OS (Windows, macOS, Linux) implements this interface.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
 class ForegroundAppInfo:
     """Information about the currently focused application."""
-    app_name: str          # Process name (e.g. "chrome", "Code")
-    process_id: int        # OS process ID
+
+    app_name: str  # Process name (e.g. "chrome", "Code")
+    process_id: int  # OS process ID
     raw_process_name: str  # Original process name from OS (e.g. "chrome.exe")
 
 
 @dataclass
 class NetworkConnection:
     """A single active network connection."""
+
     pid: int
     process_name: str
     remote_ip: str
     remote_port: int
-    status: str            # ESTABLISHED, CLOSE_WAIT, etc.
-    family: str            # "ipv4" or "ipv6"
+    status: str  # ESTABLISHED, CLOSE_WAIT, etc.
+    family: str  # "ipv4" or "ipv6"
 
 
 @dataclass
 class SystemInfo:
     """Basic system identification info."""
+
     mac_address: str
     hostname: str
     local_ip: str
-    os_name: str           # "windows", "macos", "linux"
+    os_name: str  # "windows", "macos", "linux"
     os_version: str
 
 
@@ -46,7 +48,7 @@ class PlatformBase(ABC):
     # --- Foreground App Detection ---
 
     @abstractmethod
-    def get_foreground_app(self) -> Optional[ForegroundAppInfo]:
+    def get_foreground_app(self) -> ForegroundAppInfo | None:
         """
         Get the currently focused foreground application.
         Returns None if no window is focused or detection fails.
@@ -112,7 +114,7 @@ class PlatformBase(ABC):
     # --- Process Utilities ---
 
     @abstractmethod
-    def get_process_name(self, pid: int) -> Optional[str]:
+    def get_process_name(self, pid: int) -> str | None:
         """Get the process name for a given PID. Returns None if not found."""
         pass
 

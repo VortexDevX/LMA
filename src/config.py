@@ -2,11 +2,11 @@
 Agent configuration - loads from .env, environment variables, and defaults.
 """
 
+import json
 import os
 import sys
-import json
-from pathlib import Path
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 def _get_data_dir() -> Path:
@@ -41,7 +41,7 @@ def _load_env_file(env_path: Path) -> dict:
     env_vars = {}
     if env_path.exists():
         # Use utf-8-sig to handle files created with BOM (common on Windows).
-        with open(env_path, "r", encoding="utf-8-sig", errors="ignore") as f:
+        with open(env_path, encoding="utf-8-sig", errors="ignore") as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith("#"):
@@ -56,7 +56,7 @@ def _load_env_file(env_path: Path) -> dict:
 
 def _get_project_root() -> Path:
     """Get project root, handling both dev and bundled exe."""
-    if getattr(sys, 'frozen', False):
+    if getattr(sys, "frozen", False):
         # Running as bundled exe
         return Path(sys._MEIPASS)  # type: ignore
     else:
@@ -76,14 +76,14 @@ _env_vars.update(_load_env_file(_project_root / ".env"))
 _env_vars.update(_load_env_file(_get_data_dir() / ".env"))
 
 # 3. Executable directory (fallback for bundled exe override)
-if getattr(sys, 'frozen', False):
+if getattr(sys, "frozen", False):
     _exe_dir = Path(sys.executable).parent
     _env_vars.update(_load_env_file(_exe_dir / ".env"))
 
 
 def _env(key: str, default: str = "") -> str:
     """Get value from environment or .env file."""
-    return os.environ.get(key, _env_vars.get(key, default)) # type: ignore
+    return os.environ.get(key, _env_vars.get(key, default))  # type: ignore
 
 
 @dataclass
@@ -93,6 +93,8 @@ class AgentConfig:
     # --- API ---
     API_BASE_URL: str = _env("API_BASE_URL", "https://emp-manan.mvlab.cloud")
     API_KEY: str = _env("API_KEY", "")
+    UPDATE_PUBLIC_KEY: str = _env("UPDATE_PUBLIC_KEY", "")
+    MAX_UPDATE_SIZE_MB: int = int(_env("MAX_UPDATE_SIZE_MB", "250"))
 
     # --- Intervals (seconds) ---
     APP_POLL_INTERVAL: int = int(_env("APP_POLL_INTERVAL", "1"))
@@ -125,7 +127,7 @@ class AgentConfig:
     LOG_LEVEL: str = _env("LOG_LEVEL", "INFO")
 
     # --- Agent Metadata ---
-    AGENT_VERSION: str = "1.0.1"
+    AGENT_VERSION: str = "1.0.2"
     SCHEMA_VERSION: int = 1
     SOURCE: str = "local_agent"
 
@@ -153,7 +155,7 @@ class AgentConfig:
     def load_categories(self) -> dict:
         """Load category definitions from JSON file."""
         if self.CATEGORIES_PATH.exists():
-            with open(self.CATEGORIES_PATH, "r", encoding="utf-8") as f:
+            with open(self.CATEGORIES_PATH, encoding="utf-8") as f:
                 return json.load(f)
         return {"apps": {}, "domains": {}, "ignored_domains": [], "ignored_apps": []}
 

@@ -2,9 +2,9 @@
 Local Monitoring Agent - Entry Point
 """
 
-import sys
-import os
 import argparse
+import os
+import sys
 
 
 def _hide_console():
@@ -17,10 +17,11 @@ def _hide_console():
 
     try:
         import ctypes
+
         hwnd = ctypes.windll.kernel32.GetConsoleWindow()
         if hwnd:
-            SW_HIDE = 0
-            ctypes.windll.user32.ShowWindow(hwnd, SW_HIDE)
+            sw_hide = 0
+            ctypes.windll.user32.ShowWindow(hwnd, sw_hide)
     except Exception:
         pass
 
@@ -38,23 +39,28 @@ def _parse_args():
         description="Local Monitoring Agent - Productivity Analytics",
     )
     parser.add_argument(
-        "--version", action="store_true",
+        "--version",
+        action="store_true",
         help="Print version and exit",
     )
     parser.add_argument(
-        "--status", action="store_true",
+        "--status",
+        action="store_true",
         help="Print agent status and exit",
     )
     parser.add_argument(
-        "--reset", action="store_true",
+        "--reset",
+        action="store_true",
         help="Clear identity config (force re-setup on next launch)",
     )
     parser.add_argument(
-        "--uninstall", action="store_true",
+        "--uninstall",
+        action="store_true",
         help="Remove auto-start, clean data, and exit",
     )
     parser.add_argument(
-        "--setup", action="store_true",
+        "--setup",
+        action="store_true",
         help="Force first-launch setup (even if already configured)",
     )
     return parser.parse_args()
@@ -63,6 +69,7 @@ def _parse_args():
 def _cmd_version():
     """Print version and exit."""
     from src.config import config
+
     print(f"Local Monitor Agent v{config.AGENT_VERSION}")
     print(f"Python {sys.version.split()[0]} ({sys.platform})")
     return 0
@@ -81,7 +88,8 @@ def _cmd_status():
     if config.LOCK_FILE.exists():
         try:
             pid = int(config.LOCK_FILE.read_text().strip())
-            import psutil # type: ignore
+            import psutil  # type: ignore
+
             if psutil.pid_exists(pid):
                 print(f"Process:      RUNNING (PID {pid})")
             else:
@@ -145,7 +153,8 @@ def _cmd_reset():
     if config.LOCK_FILE.exists():
         try:
             pid = int(config.LOCK_FILE.read_text().strip())
-            import psutil # type: ignore
+            import psutil  # type: ignore
+
             if psutil.pid_exists(pid):
                 print(f"ERROR: Agent is running (PID {pid}). Stop it first.")
                 return 1
@@ -179,15 +188,17 @@ def _cmd_reset():
 
 def _cmd_uninstall():
     """Remove auto-start, optionally clean all data."""
-    from src.config import config
-    from src.utils.autostart import unregister_autostart, is_autostart_enabled
     import shutil
+
+    from src.config import config
+    from src.utils.autostart import is_autostart_enabled, unregister_autostart
 
     # Check not running
     if config.LOCK_FILE.exists():
         try:
             pid = int(config.LOCK_FILE.read_text().strip())
-            import psutil # type: ignore
+            import psutil  # type: ignore
+
             if psutil.pid_exists(pid):
                 print(f"ERROR: Agent is running (PID {pid}). Stop it first.")
                 return 1
@@ -236,9 +247,9 @@ def _cmd_uninstall():
 def _cmd_setup():
     """Force first-launch setup."""
     from src.config import config
-    from src.storage.sqlite_buffer import SQLiteBuffer
     from src.network.api_sender import APISender
     from src.setup.first_launch import run_first_launch
+    from src.storage.sqlite_buffer import SQLiteBuffer
     from src.utils.autostart import register_autostart
 
     buffer = SQLiteBuffer(db_path=config.DB_PATH)
@@ -297,6 +308,7 @@ def main():
 
         # Normal run (console already hidden)
         from src.agent_core import AgentCore
+
         agent = AgentCore()
         exit_code = agent.run()
         sys.exit(exit_code)
@@ -310,6 +322,7 @@ def main():
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
         with open(log_path, "a") as f:
             import traceback
+
             f.write(f"\n{'='*50}\n")
             f.write(f"Crash at: {__import__('datetime').datetime.now()}\n")
             f.write(f"Error: {e}\n")

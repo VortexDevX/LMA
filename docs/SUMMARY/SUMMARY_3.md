@@ -140,7 +140,7 @@ _env_vars.update(_load_env_file(_get_data_dir() / ".env"))  # Production
 **User creates production config:**
 
 ```powershell
-"API_KEY=actual_admin_api_key" | Out-File "$env:APPDATA\LocalMonitorAgent\.env" -Encoding utf8
+"API_KEY=replace-with-local-agent-service-key" | Out-File "$env:APPDATA\LocalMonitorAgent\.env" -Encoding utf8
 ```
 
 ---
@@ -250,26 +250,31 @@ These are backend errors, not agent errors. Agent correctly buffers failed reque
 ### Modified Files:
 
 1. **`src/main.py`**
+
    - Added `sys.stdout`/`sys.stderr` null handling for windowed mode
    - Added crash logging to file
 
 2. **`src/config.py`**
+
    - Added `_get_project_root()` with PyInstaller detection
    - Load `.env` from both project root and AppData
    - Strip quotes from `.env` values
    - Handle bundled `categories.json` path
 
 3. **`src/agent_core.py`**
+
    - Fixed `_setup_logging()` to check if `sys.stdout` exists
    - Fixed `_ensure_configured()` to check if `sys.stdin` exists before `.isatty()`
 
 4. **`src/setup/first_launch.py`**
+
    - Changed endpoint from `/verify` to `/login`
    - Added password prompt with `getpass.getpass()`
    - Updated payload to include password
    - Store `access_token` in config
 
 5. **`tests/test_tray.py`**
+
    - Added missing `from src.config import config` import
 
 6. **`tests/test_packaging.py`** (new)

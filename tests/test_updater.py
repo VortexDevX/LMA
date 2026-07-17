@@ -4,17 +4,14 @@ Covers version comparison, update checks, download verification,
 crash tracking, and rollback logic.
 """
 
-import time
 import hashlib
-import sys
-import pytest # type: ignore
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-
+import time
+from unittest.mock import MagicMock, patch
 
 # ============================================================
 # Version comparison tests
 # ============================================================
+
 
 class TestVersionComparison:
     """Tests for semantic version comparison."""
@@ -77,12 +74,13 @@ class TestVersionComparison:
     def test_none_version_returns_false(self):
         from src.utils.updater import Updater
 
-        assert Updater._is_newer(None, "1.0.0") is False # type: ignore
+        assert Updater._is_newer(None, "1.0.0") is False  # type: ignore
 
 
 # ============================================================
 # Update check tests
 # ============================================================
+
 
 class TestUpdateCheck:
     """Tests for checking backend for updates."""
@@ -91,7 +89,9 @@ class TestUpdateCheck:
         from src.utils.updater import Updater
 
         sender = MagicMock()
-        return Updater(sender), sender
+        updater = Updater(sender)
+        updater._manifest_is_trusted = MagicMock(return_value=True)
+        return updater, sender
 
     def test_check_returns_none_when_up_to_date(self):
         updater, sender = self._make_updater()
@@ -112,7 +112,7 @@ class TestUpdateCheck:
         sender.get_immediate.return_value = {
             "version": "2.0.0",
             "download_url": "https://example.com/agent.exe",
-            "checksum": "abc123",
+            "checksum": "a" * 64,
             "release_notes": "Bug fixes",
         }
 
@@ -123,7 +123,7 @@ class TestUpdateCheck:
         assert result is not None
         assert result.version == "2.0.0"
         assert result.download_url == "https://example.com/agent.exe"
-        assert result.checksum == "abc123"
+        assert result.checksum == "a" * 64
 
     def test_check_returns_none_on_no_response(self):
         updater, sender = self._make_updater()
@@ -155,6 +155,24 @@ class TestUpdateCheck:
 
         assert result is None
 
+    def test_check_rejects_unsigned_newer_manifest(self):
+        from src.utils.updater import Updater
+
+        sender = MagicMock()
+        sender.get_immediate.return_value = {
+            "version": "2.0.0",
+            "download_url": "https://example.com/agent.exe",
+            "checksum": "a" * 64,
+        }
+        updater = Updater(sender)
+
+        with patch("src.utils.updater.config") as mock_config:
+            mock_config.AGENT_VERSION = "1.0.0"
+            mock_config.UPDATE_PUBLIC_KEY = ""
+            result = updater.check_for_update()
+
+        assert result is None
+
     def test_check_handles_exception(self):
         updater, sender = self._make_updater()
 
@@ -180,7 +198,7 @@ class TestUpdateCheck:
         sender.get_immediate.return_value = {
             "version": "3.0.0",
             "download_url": "https://example.com/agent.exe",
-            "checksum": "sha256hex",
+            "checksum": "b" * 64,
         }
 
         with patch("src.utils.updater.config") as mock_config:
@@ -194,6 +212,7 @@ class TestUpdateCheck:
 # ============================================================
 # Checksum verification tests
 # ============================================================
+
 
 class TestChecksumVerification:
     """Tests for SHA-256 checksum verification."""
@@ -218,13 +237,13 @@ class TestChecksumVerification:
 
         assert updater.verify_checksum(test_file, "0000bad0000") is False
 
-    def test_empty_checksum_skips_verification(self, tmp_path):
+    def test_empty_checksum_rejects_update(self, tmp_path):
         updater, _ = self._make_updater()
 
         test_file = tmp_path / "test.exe"
         test_file.write_bytes(b"anything")
 
-        assert updater.verify_checksum(test_file, "") is True
+        assert updater.verify_checksum(test_file, "") is False
 
     def test_missing_file(self, tmp_path):
         updater, _ = self._make_updater()
@@ -248,16 +267,40 @@ class TestChecksumVerification:
         return Updater(MagicMock()), MagicMock()
 
 
+def test_download_rejects_declared_oversized_binary():
+    from src.utils.updater import UpdateInfo, Updater
+
+    response = MagicMock()
+    response.headers = {"Content-Length": str(2 * 1024 * 1024)}
+    response.raise_for_status.return_value = None
+    info = UpdateInfo(
+        version="2.0.0",
+        download_url="https://downloads.example.com/agent.exe",
+        checksum="a" * 64,
+    )
+
+    with (
+        patch("requests.get", return_value=response),
+        patch("src.utils.updater.config") as mock_config,
+    ):
+        mock_config.MAX_UPDATE_SIZE_MB = 1
+        result = Updater(MagicMock()).download_update(info)
+
+    assert result is None
+    response.close.assert_called_once()
+
+
 # ============================================================
 # Crash tracking tests
 # ============================================================
+
 
 class TestCrashTracking:
     """Tests for crash count tracking and rollback decision."""
 
     def test_record_clean_start_resets_count(self, tmp_path):
-        from src.utils.updater import Updater
         from src.storage.sqlite_buffer import SQLiteBuffer
+        from src.utils.updater import Updater
 
         buf = SQLiteBuffer(db_path=tmp_path / "test.db")
         buf.set_config("crash_count", "5")
@@ -269,8 +312,8 @@ class TestCrashTracking:
         buf.close()
 
     def test_record_crash_increments(self, tmp_path):
-        from src.utils.updater import Updater
         from src.storage.sqlite_buffer import SQLiteBuffer
+        from src.utils.updater import Updater
 
         buf = SQLiteBuffer(db_path=tmp_path / "test.db")
         buf.set_config("crash_count", "1")
@@ -281,8 +324,8 @@ class TestCrashTracking:
         buf.close()
 
     def test_record_crash_from_zero(self, tmp_path):
-        from src.utils.updater import Updater
         from src.storage.sqlite_buffer import SQLiteBuffer
+        from src.utils.updater import Updater
 
         buf = SQLiteBuffer(db_path=tmp_path / "test.db")
 
@@ -292,8 +335,8 @@ class TestCrashTracking:
         buf.close()
 
     def test_should_rollback_false_below_threshold(self, tmp_path):
-        from src.utils.updater import Updater
         from src.storage.sqlite_buffer import SQLiteBuffer
+        from src.utils.updater import Updater
 
         buf = SQLiteBuffer(db_path=tmp_path / "test.db")
         buf.set_config("crash_count", "2")
@@ -302,8 +345,8 @@ class TestCrashTracking:
         buf.close()
 
     def test_should_rollback_true_at_threshold(self, tmp_path):
-        from src.utils.updater import Updater, MAX_CRASH_COUNT
         from src.storage.sqlite_buffer import SQLiteBuffer
+        from src.utils.updater import MAX_CRASH_COUNT, Updater
 
         buf = SQLiteBuffer(db_path=tmp_path / "test.db")
         buf.set_config("crash_count", str(MAX_CRASH_COUNT))
@@ -312,8 +355,8 @@ class TestCrashTracking:
         buf.close()
 
     def test_should_rollback_true_above_threshold(self, tmp_path):
-        from src.utils.updater import Updater, MAX_CRASH_COUNT
         from src.storage.sqlite_buffer import SQLiteBuffer
+        from src.utils.updater import MAX_CRASH_COUNT, Updater
 
         buf = SQLiteBuffer(db_path=tmp_path / "test.db")
         buf.set_config("crash_count", str(MAX_CRASH_COUNT + 5))
@@ -322,8 +365,8 @@ class TestCrashTracking:
         buf.close()
 
     def test_should_rollback_handles_invalid_count(self, tmp_path):
-        from src.utils.updater import Updater
         from src.storage.sqlite_buffer import SQLiteBuffer
+        from src.utils.updater import Updater
 
         buf = SQLiteBuffer(db_path=tmp_path / "test.db")
         buf.set_config("crash_count", "not_a_number")
@@ -332,8 +375,8 @@ class TestCrashTracking:
         buf.close()
 
     def test_should_rollback_handles_missing_count(self, tmp_path):
-        from src.utils.updater import Updater
         from src.storage.sqlite_buffer import SQLiteBuffer
+        from src.utils.updater import Updater
 
         buf = SQLiteBuffer(db_path=tmp_path / "test.db")
         # No crash_count set
@@ -345,6 +388,7 @@ class TestCrashTracking:
 # ============================================================
 # Apply update tests
 # ============================================================
+
 
 class TestApplyUpdate:
     """Tests for update application logic."""
@@ -387,9 +431,11 @@ class TestApplyUpdate:
         new_binary = tmp_path / "new_agent.exe"
         new_binary.write_bytes(b"new version")
 
-        with patch("sys.executable", str(current_exe)), \
-             patch.object(updater, "_apply_windows_update", return_value=True), \
-             patch.object(updater, "_apply_unix_update", return_value=True):
+        with (
+            patch("sys.executable", str(current_exe)),
+            patch.object(updater, "_apply_windows_update", return_value=True),
+            patch.object(updater, "_apply_unix_update", return_value=True),
+        ):
             result = updater.apply_update(new_binary)
 
         assert result is True
@@ -401,6 +447,7 @@ class TestApplyUpdate:
 # ============================================================
 # Rollback tests
 # ============================================================
+
 
 class TestRollback:
     """Tests for rollback to previous version."""
@@ -444,6 +491,7 @@ class TestRollback:
 # ============================================================
 # Agent core integration tests
 # ============================================================
+
 
 class TestAgentCoreUpdateIntegration:
     """Tests for update integration in AgentCore."""
@@ -508,7 +556,6 @@ class TestAgentCoreUpdateIntegration:
         buf.close()
 
     def test_clean_start_resets_crash_count(self, tmp_path):
-        from src.agent_core import AgentCore
         from src.storage.sqlite_buffer import SQLiteBuffer
         from src.utils.updater import Updater
 

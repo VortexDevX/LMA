@@ -4,15 +4,14 @@ Run with: python -m pytest tests/test_api_sender.py -v
 """
 
 import time
-import json
-import pytest
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch
 
+import pytest
 import responses
 
-from src.network.api_sender import APISender, ENDPOINTS
-from src.storage.sqlite_buffer import SQLiteBuffer
 from src.config import config
+from src.network.api_sender import ENDPOINTS, APISender
+from src.storage.sqlite_buffer import SQLiteBuffer
 
 
 @pytest.fixture
@@ -107,6 +106,23 @@ class TestSendImmediate:
         )
 
         assert result is None
+
+    @responses.activate
+    def test_send_immediate_can_return_structured_auth_error(self, sender, base_url):
+        responses.add(
+            responses.POST,
+            f"{base_url}/api/v1/auth/login",
+            json={"detail": "Invalid credentials"},
+            status=401,
+        )
+
+        result = sender.send_immediate(
+            "/api/v1/auth/login",
+            {"employee_code": "EMP001", "password": "bad", "totp_code": "000000"},
+            include_errors=True,
+        )
+
+        assert result == {"detail": "Invalid credentials", "_http_status": 401}
 
     @responses.activate
     def test_send_immediate_server_error(self, sender, base_url):

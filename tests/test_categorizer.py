@@ -3,10 +3,11 @@ Tests for the Categorization Module.
 Run with: python -m pytest tests/test_categorizer.py -v
 """
 
-import pytest
 from unittest.mock import patch
 
-from src.categorization.categorizer import Categorizer, VALID_CATEGORIES
+import pytest
+
+from src.categorization.categorizer import VALID_CATEGORIES, Categorizer
 
 
 @pytest.fixture
@@ -215,7 +216,7 @@ class TestDomainNormalization:
     def test_empty_returns_empty(self):
         c = Categorizer()
         assert c.normalize_domain("") == ""
-        assert c.normalize_domain(None) == "" # type: ignore
+        assert c.normalize_domain(None) == ""  # type: ignore
 
 
 class TestRuleUpdates:
@@ -223,15 +224,17 @@ class TestRuleUpdates:
 
     @patch.object(Categorizer, "_save_rules")
     def test_update_adds_new_rules(self, mock_save, categorizer):
-        categorizer.update_rules({
-            "version": categorizer.version + 1,
-            "apps": {
-                "productivity": ["my_custom_tool", "another_tool"],
-            },
-            "domains": {
-                "productivity": ["mycustomsite.com"],
-            },
-        })
+        categorizer.update_rules(
+            {
+                "version": categorizer.version + 1,
+                "apps": {
+                    "productivity": ["my_custom_tool", "another_tool"],
+                },
+                "domains": {
+                    "productivity": ["mycustomsite.com"],
+                },
+            }
+        )
 
         assert categorizer.categorize_app("my_custom_tool") == "productivity"
         assert categorizer.categorize_domain("mycustomsite.com") == "productivity"
@@ -241,32 +244,38 @@ class TestRuleUpdates:
     def test_update_skips_old_version(self, mock_save, categorizer):
         old_count = categorizer.app_rule_count
 
-        categorizer.update_rules({
-            "version": 0,
-            "apps": {
-                "productivity": ["should_not_be_added"],
-            },
-        })
+        categorizer.update_rules(
+            {
+                "version": 0,
+                "apps": {
+                    "productivity": ["should_not_be_added"],
+                },
+            }
+        )
 
         assert categorizer.app_rule_count == old_count
         mock_save.assert_not_called()
 
     @patch.object(Categorizer, "_save_rules")
     def test_update_overrides_existing(self, mock_save, categorizer):
-        categorizer.update_rules({
-            "version": categorizer.version + 1,
-            "apps": {
-                "entertainment": ["special_app"],
-            },
-        })
+        categorizer.update_rules(
+            {
+                "version": categorizer.version + 1,
+                "apps": {
+                    "entertainment": ["special_app"],
+                },
+            }
+        )
         assert categorizer.categorize_app("special_app") == "entertainment"
 
-        categorizer.update_rules({
-            "version": categorizer.version + 1,
-            "apps": {
-                "productivity": ["special_app"],
-            },
-        })
+        categorizer.update_rules(
+            {
+                "version": categorizer.version + 1,
+                "apps": {
+                    "productivity": ["special_app"],
+                },
+            }
+        )
         assert categorizer.categorize_app("special_app") == "productivity"
 
     @patch.object(Categorizer, "_save_rules")

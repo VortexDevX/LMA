@@ -4,19 +4,19 @@ Checks backend for newer agent versions, downloads, verifies, and applies update
 Keeps a backup of previous version for rollback.
 """
 
-import os
-import sys
-import time
-import shutil
 import hashlib
-import tempfile
-import subprocess
 import logging
-from pathlib import Path
-from typing import Optional
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
 from dataclasses import dataclass
+from pathlib import Path
 
 from src.config import config
+from src.utils.update_signing import verify_manifest_signature
 
 logger = logging.getLogger("agent.updater")
 
@@ -25,16 +25,19 @@ UPDATE_CHECK_INTERVAL = 86400  # 24 hours
 
 # Max consecutive crashes before rollback
 MAX_CRASH_COUNT = 3
+SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
 @dataclass
 class UpdateInfo:
     """Information about an available update."""
+
     version: str
     download_url: str
     checksum: str  # SHA-256 hex digest
     release_notes: str = ""
     mandatory: bool = False
+    signature: str = ""
 
 
 class Updater:
@@ -57,7 +60,7 @@ class Updater:
         """
         self._sender = sender
         self._last_check_time: float = 0.0
-        self._available_update: Optional[UpdateInfo] = None
+        self._available_update: UpdateInfo | None = None
         self._is_frozen = getattr(sys, "frozen", False)
 
     # --------------------------------------------------
@@ -68,7 +71,11 @@ class Updater:
         """Whether enough time has passed since last check."""
         return time.time() - self._last_check_time >= UPDATE_CHECK_INTERVAL
 
-    def check_for_update(self) -> Optional[UpdateInfo]:
+    @staticmethod
+    def _manifest_is_trusted(manifest: dict) -> bool:
+        return verify_manifest_signature(manifest, config.UPDATE_PUBLIC_KEY)
+
+    def check_for_update(self) -> UpdateInfo | None:
         """
         Query backend for latest agent version.
         Returns UpdateInfo if a newer version is available, None otherwise.
@@ -80,6 +87,10 @@ class Updater:
 
             if result is None:
                 logger.debug("Update check: no response from server")
+                return None
+
+            if not self._manifest_is_trusted(result):
+                logger.error("Update manifest rejected: invalid or missing signature")
                 return None
 
             remote_version = result.get("version", "")
@@ -100,18 +111,18 @@ class Updater:
                 checksum=result.get("checksum", ""),
                 release_notes=result.get("release_notes", ""),
                 mandatory=result.get("mandatory", False),
+                signature=result.get("signature", ""),
             )
 
             if not info.download_url:
-                logger.warning(
-                    f"Update v{remote_version} available but no download URL"
-                )
+                logger.warning(f"Update v{remote_version} available but no download URL")
+                return None
+            if not SHA256_PATTERN.fullmatch(info.checksum):
+                logger.error("Update manifest rejected: checksum is not SHA-256")
                 return None
 
             self._available_update = info
-            logger.info(
-                f"Update available: v{config.AGENT_VERSION} → v{remote_version}"
-            )
+            logger.info(f"Update available: v{config.AGENT_VERSION} → v{remote_version}")
             return info
 
         except Exception as e:
@@ -119,14 +130,14 @@ class Updater:
             return None
 
     @property
-    def available_update(self) -> Optional[UpdateInfo]:
+    def available_update(self) -> UpdateInfo | None:
         return self._available_update
 
     # --------------------------------------------------
     # Download and verify
     # --------------------------------------------------
 
-    def download_update(self, info: UpdateInfo) -> Optional[Path]:
+    def download_update(self, info: UpdateInfo) -> Path | None:
         """
         Download the update binary to a temp directory.
         Returns path to downloaded file, or None on failure.
@@ -134,6 +145,8 @@ class Updater:
         if not info.download_url:
             return None
 
+        temp_dir: Path | None = None
+        response = None
         try:
             import requests
 
@@ -152,26 +165,38 @@ class Updater:
             )
             response.raise_for_status()
 
+            max_bytes = max(1, config.MAX_UPDATE_SIZE_MB) * 1024 * 1024
+            content_length = int(response.headers.get("Content-Length") or 0)
+            if content_length > max_bytes:
+                raise ValueError("update exceeds configured size limit")
+
             total = 0
             with open(dest, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
+                    if not chunk:
+                        continue
                     f.write(chunk)
                     total += len(chunk)
+                    if total > max_bytes:
+                        raise ValueError("update exceeds configured size limit")
 
-            logger.info(
-                f"Downloaded update: {dest} ({total / 1024 / 1024:.1f} MB)"
-            )
+            logger.info(f"Downloaded update: {dest} ({total / 1024 / 1024:.1f} MB)")
             return dest
 
         except Exception as e:
             logger.error(f"Download failed: {e}")
+            if temp_dir:
+                shutil.rmtree(temp_dir, ignore_errors=True)
             return None
+        finally:
+            if response is not None:
+                response.close()
 
     def verify_checksum(self, file_path: Path, expected: str) -> bool:
         """Verify SHA-256 checksum of downloaded file."""
         if not expected:
-            logger.warning("No checksum provided, skipping verification")
-            return True
+            logger.error("Update rejected: no SHA-256 checksum was provided")
+            return False
 
         try:
             sha256 = hashlib.sha256()
@@ -185,9 +210,7 @@ class Updater:
             if match:
                 logger.info("Checksum verified OK")
             else:
-                logger.error(
-                    f"Checksum mismatch: expected={expected}, actual={actual}"
-                )
+                logger.error(f"Checksum mismatch: expected={expected}, actual={actual}")
 
             return match
 
@@ -234,21 +257,15 @@ class Updater:
             # Step 2: On Windows, we can't replace a running exe directly.
             # Create a helper script that waits, replaces, and restarts.
             if sys.platform == "win32":
-                return self._apply_windows_update(
-                    current_exe, new_binary, backup_path
-                )
+                return self._apply_windows_update(current_exe, new_binary, backup_path)
             else:
-                return self._apply_unix_update(
-                    current_exe, new_binary, backup_path
-                )
+                return self._apply_unix_update(current_exe, new_binary, backup_path)
 
         except Exception as e:
             logger.error(f"Failed to apply update: {e}")
             return False
 
-    def _apply_windows_update(
-        self, current_exe: Path, new_binary: Path, backup_path: Path
-    ) -> bool:
+    def _apply_windows_update(self, current_exe: Path, new_binary: Path, backup_path: Path) -> bool:
         """Apply update on Windows using a helper batch script."""
         try:
             script_path = current_exe.parent / "_update.bat"
@@ -275,8 +292,7 @@ del "%~f0"
             # Launch the script detached
             subprocess.Popen(
                 ["cmd.exe", "/c", str(script_path)],
-                creationflags=subprocess.DETACHED_PROCESS
-                | subprocess.CREATE_NO_WINDOW,
+                creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
                 close_fds=True,
             )
 
@@ -287,9 +303,7 @@ del "%~f0"
             logger.error(f"Windows update script failed: {e}")
             return False
 
-    def _apply_unix_update(
-        self, current_exe: Path, new_binary: Path, backup_path: Path
-    ) -> bool:
+    def _apply_unix_update(self, current_exe: Path, new_binary: Path, backup_path: Path) -> bool:
         """Apply update on Linux/macOS."""
         try:
             script_path = current_exe.parent / "_update.sh"

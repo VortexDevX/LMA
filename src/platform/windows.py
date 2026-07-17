@@ -5,18 +5,17 @@ Uses ctypes for Win32 API, psutil for process/network info.
 
 import ctypes
 import ctypes.wintypes
-import socket
 import logging
-import uuid
 import platform
-from typing import Optional
+import socket
+import uuid
 
 import psutil
 
 from src.platform.base import (
-    PlatformBase,
     ForegroundAppInfo,
     NetworkConnection,
+    PlatformBase,
     SystemInfo,
 )
 
@@ -78,7 +77,7 @@ class WindowsPlatform(PlatformBase):
 
     # --- Foreground App ---
 
-    def get_foreground_app(self) -> Optional[ForegroundAppInfo]:
+    def get_foreground_app(self) -> ForegroundAppInfo | None:
         try:
             hwnd = self._user32.GetForegroundWindow()
             if not hwnd:
@@ -160,7 +159,7 @@ class WindowsPlatform(PlatformBase):
         try:
             mac_int = uuid.getnode()
             mac_str = ":".join(
-                ["{:02x}".format((mac_int >> i) & 0xFF) for i in range(0, 48, 8)][::-1]
+                [f"{(mac_int >> i) & 0xFF:02x}" for i in range(0, 48, 8)][::-1]
             )
             return mac_str
         except Exception:
@@ -236,7 +235,7 @@ class WindowsPlatform(PlatformBase):
 
     # --- Process Utilities ---
 
-    def get_process_name(self, pid: int) -> Optional[str]:
+    def get_process_name(self, pid: int) -> str | None:
         # Check cache first
         if pid in self._process_cache:
             return self._process_cache[pid]

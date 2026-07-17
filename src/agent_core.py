@@ -4,20 +4,19 @@ Ties together all modules: collectors, session manager, API sender, tray.
 Manages the complete agent lifecycle.
 """
 
-import sys
-import os
-import time
-import signal
+import atexit
 import logging
 import logging.handlers
-import atexit
-from typing import Optional
+import os
+import signal
+import sys
+import time
 
 from src.config import config
-from src.storage.sqlite_buffer import SQLiteBuffer
-from src.session.session_manager import SessionManager
 from src.network.api_sender import APISender
+from src.session.session_manager import SessionManager
 from src.setup.first_launch import run_first_launch
+from src.storage.sqlite_buffer import SQLiteBuffer
 from src.ui.tray import SystemTray, is_tray_available
 from src.utils.autostart import is_autostart_enabled, register_autostart
 from src.utils.updater import Updater
@@ -54,11 +53,11 @@ class AgentCore:
     """
 
     def __init__(self):
-        self._buffer: Optional[SQLiteBuffer] = None
-        self._sender: Optional[APISender] = None
-        self._session_manager: Optional[SessionManager] = None
-        self._tray: Optional[SystemTray] = None
-        self._updater: Optional[Updater] = None
+        self._buffer: SQLiteBuffer | None = None
+        self._sender: APISender | None = None
+        self._session_manager: SessionManager | None = None
+        self._tray: SystemTray | None = None
+        self._updater: Updater | None = None
         self._running = False
         self._exit_code = 0
 
@@ -153,14 +152,10 @@ class AgentCore:
 
                 old_pid = int(lock_file.read_text().strip())
                 if psutil.pid_exists(old_pid):
-                    logger.error(
-                        f"Agent already running (PID {old_pid}). Exiting."
-                    )
+                    logger.error(f"Agent already running (PID {old_pid}). Exiting.")
                     sys.exit(1)
                 else:
-                    logger.warning(
-                        f"Stale lock file (PID {old_pid}). Removing."
-                    )
+                    logger.warning(f"Stale lock file (PID {old_pid}). Removing.")
                     lock_file.unlink()
             except (ValueError, Exception):
                 lock_file.unlink(missing_ok=True)
@@ -175,8 +170,9 @@ class AgentCore:
         self._buffer = SQLiteBuffer()
         logger.info(f"SQLite buffer ready ({self._buffer.db_size_mb:.2f} MB)")
 
-        # Migrate API key before creating sender
-        self._migrate_api_key()
+        # Remove credentials written by older builds. Runtime secrets come only
+        # from the protected environment/config file.
+        self._remove_legacy_credentials()
 
         self._sender = APISender(self._buffer)
         logger.info("API sender ready")
@@ -197,39 +193,12 @@ class AgentCore:
         self._tray.on_resume = self._on_resume
         logger.info("System tray ready")
 
-    def _migrate_api_key(self):
-        """
-        Migrate API key from plaintext .env to obfuscated storage in SQLite.
-        On subsequent runs, load from DB instead of .env.
-        """
-        if not config.API_KEY or len(config.API_KEY) < 5:
+    def _remove_legacy_credentials(self):
+        """Delete reversible/plain credential copies written by older builds."""
+        if not self._buffer:
             return
-
-        try:
-            from src.utils.crypto import get_machine_salt, obfuscate, deobfuscate
-
-            salt = get_machine_salt()
-            stored = self._buffer.get_config("api_key_enc")  # type: ignore
-
-            if stored:
-                try:
-                    decrypted = deobfuscate(stored, salt)
-                    if decrypted:
-                        config.API_KEY = decrypted
-                        logger.info("API key loaded from secure storage")
-                        return
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to decrypt stored API key ({e}), "
-                        f"re-encrypting from .env"
-                    )
-
-            encrypted = obfuscate(config.API_KEY, salt)
-            self._buffer.set_config("api_key_enc", encrypted)  # type: ignore
-            logger.info("API key migrated to secure storage")
-
-        except Exception as e:
-            logger.warning(f"API key migration skipped: {e}")
+        for key in ("api_key_enc", "access_token"):
+            self._buffer.delete_config(key)
 
     def _check_crash_rollback(self):
         """Check if repeated crashes warrant a rollback to previous version."""
@@ -237,9 +206,7 @@ class AgentCore:
             return
 
         if Updater.should_rollback(self._buffer):
-            logger.warning(
-                f"Crash count exceeds threshold. Attempting rollback..."
-            )
+            logger.warning("Crash count exceeds threshold. Attempting rollback...")
             if self._updater and self._updater.rollback():
                 logger.info("Rollback successful. Restart required.")
                 Updater.record_clean_start(self._buffer)
@@ -258,10 +225,7 @@ class AgentCore:
             emp_id = self._session_manager.employee_id  # type: ignore
             mac = self._session_manager.device_mac  # type: ignore
             name = self._buffer.get_config("employee_name", "Unknown")  # type: ignore
-            logger.info(
-                f"Identity loaded: employee={emp_id} ({name}), "
-                f"device={mac}"
-            )
+            logger.info(f"Identity loaded: employee={emp_id} ({name}), " f"device={mac}")
             return True
 
         logger.info("First launch detected. Running setup...")
@@ -276,8 +240,7 @@ class AgentCore:
                     logger.info("Auto-start registered for boot")
                 else:
                     logger.warning(
-                        "Could not register auto-start "
-                        "(may not be running as bundled exe)"
+                        "Could not register auto-start " "(may not be running as bundled exe)"
                     )
         else:
             from src.ui.setup_wizard import is_tk_available, run_setup_wizard
@@ -334,8 +297,6 @@ class AgentCore:
 
         last_watchdog = time.time()
         last_memory_check = time.time()
-        last_update_check = time.time()
-
         while self._running:
             try:
                 time.sleep(1)
@@ -359,7 +320,6 @@ class AgentCore:
             # Update check
             if self._updater and self._updater.should_check():
                 self._check_for_updates()
-                last_update_check = now
 
     def _request_stop(self):
         """Request agent stop (called from tray quit)."""
@@ -396,8 +356,7 @@ class AgentCore:
                 pending = self._buffer.get_pending_count()
                 if pending > 0:
                     logger.warning(
-                        f"{pending} records still pending "
-                        f"(will be sent on next launch)"
+                        f"{pending} records still pending " f"(will be sent on next launch)"
                     )
                 self._buffer.close()
                 logger.info("SQLite buffer closed")
@@ -440,8 +399,7 @@ class AgentCore:
 
             if rss_mb > MEMORY_WARNING_MB:
                 logger.warning(
-                    f"High memory usage: {rss_mb:.1f} MB "
-                    f"(threshold={MEMORY_WARNING_MB} MB)"
+                    f"High memory usage: {rss_mb:.1f} MB " f"(threshold={MEMORY_WARNING_MB} MB)"
                 )
             else:
                 logger.debug(f"Memory usage: {rss_mb:.1f} MB")
@@ -463,16 +421,10 @@ class AgentCore:
             if info is None:
                 return  # Up to date or check failed
 
-            logger.info(
-                f"Update v{info.version} available "
-                f"(current: v{config.AGENT_VERSION})"
-            )
+            logger.info(f"Update v{info.version} available " f"(current: v{config.AGENT_VERSION})")
 
             if not getattr(sys, "frozen", False):
-                logger.info(
-                    "Running from source — auto-update skipped. "
-                    "Update manually."
-                )
+                logger.info("Running from source — auto-update skipped. " "Update manually.")
                 return
 
             # Download
@@ -508,15 +460,15 @@ class AgentCore:
     def _on_pause(self):
         """Called when user pauses monitoring from tray."""
         logger.info("Pausing monitoring...")
-        
+
         # Log the pause event
         if self._buffer and self._session_manager:
             self._buffer.log_event(
                 event_type="pause",
                 employee_id=self._session_manager.employee_id,
-                device_mac=self._session_manager.device_mac
+                device_mac=self._session_manager.device_mac,
             )
-        
+
         # Flush all pending data to backend before pausing
         if self._sender:
             try:
@@ -524,7 +476,7 @@ class AgentCore:
                 self._sender._send_all_pending(bypass_cooldown=True)
             except Exception as e:
                 logger.error(f"Failed to flush data on pause: {e}")
-        
+
         # Stop monitoring
         if self._session_manager and self._session_manager.is_running:
             self._session_manager.stop()
@@ -532,15 +484,15 @@ class AgentCore:
     def _on_resume(self):
         """Called when user resumes monitoring from tray."""
         logger.info("Resuming monitoring...")
-        
+
         # Log the resume event
         if self._buffer and self._session_manager:
             self._buffer.log_event(
                 event_type="resume",
                 employee_id=self._session_manager.employee_id,
-                device_mac=self._session_manager.device_mac
+                device_mac=self._session_manager.device_mac,
             )
-        
+
         # Resume monitoring
         if self._session_manager and not self._session_manager.is_running:
             self._session_manager.start()
@@ -562,17 +514,13 @@ class AgentCore:
             import psutil  # type: ignore
 
             process = psutil.Process()
-            status["memory_mb"] = round(
-                process.memory_info().rss / (1024 * 1024), 1
-            )
+            status["memory_mb"] = round(process.memory_info().rss / (1024 * 1024), 1)
         except Exception:
             status["memory_mb"] = None
 
         # Employee name from buffer
         if self._buffer:
-            status["employee_name"] = self._buffer.get_config(
-                "employee_name", "Unknown"
-            )
+            status["employee_name"] = self._buffer.get_config("employee_name", "Unknown")
 
         # Update info
         if self._updater and self._updater.available_update:

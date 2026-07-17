@@ -5,11 +5,13 @@
 Before deploying to anyone, these gaps need closing:
 
 - **Auto-start on boot** — not implemented yet. Agent must survive reboots.
+
   - Windows: Add registry key `HKCU\...\Run` or Task Scheduler entry
   - Should be set during first launch setup automatically
   - Tray menu option to enable/disable
 
 - **Command-line arguments** — admin needs `--status`, `--reset`, `--version` without launching full agent
+
   - `--version` → print version, exit
   - `--status` → read SQLite, print health info, exit
   - `--reset` → clear identity config (force re-setup), exit

@@ -6,21 +6,20 @@ and tracks per-domain bandwidth and duration.
 Captures domain-level metadata only. No URLs, no content, no queries.
 """
 
-import time
-import socket
-import subprocess
-import threading
 import logging
 import re
+import socket
+import subprocess
 import sys
-from dataclasses import dataclass, field
-from typing import Optional
+import threading
+import time
+from dataclasses import dataclass
 
-import psutil # type: ignore
+import psutil  # type: ignore
 
+from src.categorization.categorizer import Categorizer
 from src.config import config
 from src.platform import get_platform
-from src.categorization.categorizer import Categorizer
 
 logger = logging.getLogger("agent.collector.network")
 
@@ -36,6 +35,7 @@ DNS_EVICTION_INTERVAL = 300  # seconds (5 minutes)
 @dataclass
 class DomainRecord:
     """Accumulated data for a single domain in one collection window."""
+
     domain: str
     app_name: str
     connection_count: int = 0
@@ -64,6 +64,7 @@ class DomainRecord:
 @dataclass
 class ConnectionSnapshot:
     """A snapshot of a single active connection."""
+
     pid: int
     process_name: str
     remote_ip: str
@@ -101,12 +102,12 @@ class NetworkCollector:
         self._domains: dict[str, DomainRecord] = {}
 
         # Bandwidth tracking
-        self._last_io_counters: Optional[tuple] = None
+        self._last_io_counters: tuple | None = None
         self._last_io_time: float = 0.0
 
         # Thread control
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
         # Load ignored domains
         self._ignored_domains = set()
@@ -297,14 +298,16 @@ class NetworkCollector:
             if proc_name is None:
                 proc_name = "unknown"
 
-            snapshots.append(ConnectionSnapshot(
-                pid=pid,
-                process_name=proc_name,
-                remote_ip=conn.raddr.ip,
-                remote_port=remote_port,
-                protocol="tcp" if is_tcp else "udp",
-                timestamp=now,
-            ))
+            snapshots.append(
+                ConnectionSnapshot(
+                    pid=pid,
+                    process_name=proc_name,
+                    remote_ip=conn.raddr.ip,
+                    remote_port=remote_port,
+                    protocol="tcp" if is_tcp else "udp",
+                    timestamp=now,
+                )
+            )
 
         return snapshots
 
@@ -312,7 +315,7 @@ class NetworkCollector:
     # DNS resolution
     # --------------------------------------------------
 
-    def _resolve_ip(self, ip: str) -> Optional[str]:
+    def _resolve_ip(self, ip: str) -> str | None:
         """Resolve an IP address to a domain name. Uses cache."""
         # Check cache first
         if ip in self._dns_cache:
@@ -334,13 +337,13 @@ class NetworkCollector:
         self._dns_cache_ttl[ip] = time.time()
         return None
 
-    def _reverse_dns(self, ip: str) -> Optional[str]:
+    def _reverse_dns(self, ip: str) -> str | None:
         """Perform reverse DNS lookup for an IP."""
         try:
             hostname, _, _ = socket.gethostbyaddr(ip)
             if hostname and not self._is_ip_like(hostname):
                 return hostname
-        except (socket.herror, socket.gaierror, socket.timeout):
+        except (TimeoutError, socket.herror, socket.gaierror):
             pass
         except Exception:
             pass
@@ -354,7 +357,7 @@ class NetworkCollector:
         # macOS and Linux don't have easily accessible system DNS caches
         # They rely on runtime resolution
 
-    def _refresh_dns_cache_if_needed(self, now: Optional[float] = None):
+    def _refresh_dns_cache_if_needed(self, now: float | None = None):
         """Refresh DNS cache periodically so recent browser lookups can be mapped."""
         if sys.platform != "win32":
             return
@@ -409,9 +412,7 @@ class NetworkCollector:
                         self._dns_cache_ttl[ip] = time.time()
                     current_name = None
 
-            logger.debug(
-                f"Loaded {len(self._dns_cache)} entries from Windows DNS cache"
-            )
+            logger.debug(f"Loaded {len(self._dns_cache)} entries from Windows DNS cache")
 
         except subprocess.TimeoutExpired:
             logger.debug("Timeout reading Windows DNS cache")
@@ -436,8 +437,7 @@ class NetworkCollector:
         """Remove DNS cache entries older than TTL."""
         now = time.time()
         expired_ips = [
-            ip for ip, ttl in self._dns_cache_ttl.items()
-            if now - ttl > self._dns_cache_duration
+            ip for ip, ttl in self._dns_cache_ttl.items() if now - ttl > self._dns_cache_duration
         ]
         for ip in expired_ips:
             self._dns_cache.pop(ip, None)
@@ -465,7 +465,7 @@ class NetworkCollector:
     # Bandwidth tracking
     # --------------------------------------------------
 
-    def _get_io_counters(self) -> Optional[tuple]:
+    def _get_io_counters(self) -> tuple | None:
         """Get current network IO counters."""
         try:
             counters = psutil.net_io_counters()
@@ -499,9 +499,7 @@ class NetworkCollector:
             return
 
         # Weight by connection count (more connections = more traffic likely)
-        total_connections = sum(
-            d.connection_count for d in self._domains.values()
-        )
+        total_connections = sum(d.connection_count for d in self._domains.values())
         if total_connections == 0:
             return
 

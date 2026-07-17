@@ -108,6 +108,7 @@ SELECT payload_json FROM pending_app_usage LIMIT 5;
 ```
 
 Confirm:
+
 - [ ] Domain records contain only domain names
 - [ ] No full URLs or query strings
 - [ ] No screenshots/keystroke/window-title content in payloads
@@ -133,11 +134,11 @@ Confirm:
 
 ## 13. Issue Log
 
-| ID | Issue | Severity | Owner | Status |
-|----|-------|----------|-------|--------|
-| 1  |       |          |       |        |
-| 2  |       |          |       |        |
-| 3  |       |          |       |        |
+| ID  | Issue | Severity | Owner | Status |
+| --- | ----- | -------- | ----- | ------ |
+| 1   |       |          |       |        |
+| 2   |       |          |       |        |
+| 3   |       |          |       |        |
 
 ## 14. Sign-Off
 

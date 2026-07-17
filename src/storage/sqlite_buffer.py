@@ -4,15 +4,14 @@ Survives crashes, network failures, and agent restarts.
 All pending payloads are stored here until successfully sent.
 """
 
-import sys
 import json
-import time
-import sqlite3
-import threading
 import logging
-from pathlib import Path
-from typing import Optional
+import sqlite3
+import sys
+import threading
+import time
 from dataclasses import dataclass
+from pathlib import Path
 
 from src.config import config
 
@@ -22,12 +21,13 @@ logger = logging.getLogger("agent.storage")
 @dataclass
 class PendingRecord:
     """A single buffered record waiting to be sent."""
+
     id: int
     table: str
     payload: dict
     created_at: float
     retry_count: int
-    last_retry_at: Optional[float]
+    last_retry_at: float | None
     status: str  # pending, sending, sent, failed, permanently_failed
 
 
@@ -103,10 +103,10 @@ class SQLiteBuffer:
     concurrent access issues with SQLite.
     """
 
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Path | None = None):
         self._db_path = db_path or config.DB_PATH
         self._lock = threading.Lock()
-        self._conn: Optional[sqlite3.Connection] = None
+        self._conn: sqlite3.Connection | None = None
 
         self._initialize()
 
@@ -209,7 +209,7 @@ class SQLiteBuffer:
     # Config key-value store
     # --------------------------------------------------
 
-    def get_config(self, key: str, default: Optional[str] = None) -> Optional[str]:
+    def get_config(self, key: str, default: str | None = None) -> str | None:
         """Read a config value by key."""
         with self._lock:
             try:
@@ -262,7 +262,7 @@ class SQLiteBuffer:
         if table not in VALID_TABLES:
             raise ValueError(f"Invalid table name: {table}. Must be one of {VALID_TABLES}")
 
-    def insert_pending(self, table: str, payload: dict) -> Optional[int]:
+    def insert_pending(self, table: str, payload: dict) -> int | None:
         """
         Insert a new pending record.
         Returns the record ID, or None on failure.
@@ -298,10 +298,7 @@ class SQLiteBuffer:
         with self._lock:
             try:
                 now = time.time()
-                rows = [
-                    (json.dumps(p, default=str), now, 0, "pending")
-                    for p in payloads
-                ]
+                rows = [(json.dumps(p, default=str), now, 0, "pending") for p in payloads]
                 self._conn.executemany(  # type: ignore
                     f"INSERT INTO {table} (payload_json, created_at, retry_count, status) "
                     f"VALUES (?, ?, ?, ?)",
@@ -315,10 +312,16 @@ class SQLiteBuffer:
                 logger.error(f"Failed to batch insert into {table}: {e}")
                 return 0
 
-    def log_event(self, event_type: str, employee_id: Optional[int] = None, device_mac: Optional[str] = None, details: Optional[str] = None):
+    def log_event(
+        self,
+        event_type: str,
+        employee_id: int | None = None,
+        device_mac: str | None = None,
+        details: str | None = None,
+    ):
         """
         Log an event (pause/resume/etc) to the event_log table.
-        
+
         Args:
             event_type: Type of event (e.g., 'pause', 'resume')
             employee_id: Optional employee ID
@@ -331,7 +334,7 @@ class SQLiteBuffer:
                 self._conn.execute(  # type: ignore
                     "INSERT INTO event_log (employee_id, device_mac, event_type, event_time, details) "
                     "VALUES (?, ?, ?, ?, ?)",
-                    (employee_id, device_mac, event_type, event_time, details)
+                    (employee_id, device_mac, event_type, event_time, details),
                 )
                 self._conn.commit()  # type: ignore
                 logger.debug(f"Event logged: {event_type} (employee_id={employee_id})")
@@ -362,15 +365,17 @@ class SQLiteBuffer:
                     except json.JSONDecodeError:
                         payload = {}
 
-                    records.append(PendingRecord(
-                        id=row[0],
-                        table=table,
-                        payload=payload,
-                        created_at=row[2],
-                        retry_count=row[3],
-                        last_retry_at=row[4],
-                        status=row[5],
-                    ))
+                    records.append(
+                        PendingRecord(
+                            id=row[0],
+                            table=table,
+                            payload=payload,
+                            created_at=row[2],
+                            retry_count=row[3],
+                            last_retry_at=row[4],
+                            status=row[5],
+                        )
+                    )
                 return records
             except Exception as e:
                 logger.error(f"Failed to fetch pending from {table}: {e}")
@@ -401,7 +406,7 @@ class SQLiteBuffer:
 
                     # Calculate backoff delay
                     delay = min(
-                        config.INITIAL_RETRY_DELAY * (2 ** retry_count),
+                        config.INITIAL_RETRY_DELAY * (2**retry_count),
                         config.MAX_RETRY_DELAY,
                     )
 
@@ -414,15 +419,17 @@ class SQLiteBuffer:
                     except json.JSONDecodeError:
                         payload = {}
 
-                    records.append(PendingRecord(
-                        id=row[0],
-                        table=table,
-                        payload=payload,
-                        created_at=row[2],
-                        retry_count=retry_count,
-                        last_retry_at=row[4],
-                        status=row[5],
-                    ))
+                    records.append(
+                        PendingRecord(
+                            id=row[0],
+                            table=table,
+                            payload=payload,
+                            created_at=row[2],
+                            retry_count=retry_count,
+                            last_retry_at=row[4],
+                            status=row[5],
+                        )
+                    )
                 return records
             except Exception as e:
                 logger.error(f"Failed to fetch retryable from {table}: {e}")
@@ -560,9 +567,7 @@ class SQLiteBuffer:
                 )
 
                 self._conn.commit()  # type: ignore
-                logger.warning(
-                    f"Batch permanently failed: {len(record_ids)} records in {table}"
-                )
+                logger.warning(f"Batch permanently failed: {len(record_ids)} records in {table}")
             except Exception as e:
                 logger.error(f"Failed to batch mark permanently failed in {table}: {e}")
 
@@ -601,7 +606,9 @@ class SQLiteBuffer:
                 self._conn.commit()  # type: ignore
 
                 if total_deleted > 0:
-                    logger.info(f"Cleaned up {total_deleted} sent records older than {older_than_hours}h")
+                    logger.info(
+                        f"Cleaned up {total_deleted} sent records older than {older_than_hours}h"
+                    )
 
             except Exception as e:
                 logger.error(f"Cleanup failed: {e}")

@@ -6,8 +6,6 @@ Supports local rules file + backend-pushed overrides.
 
 import json
 import logging
-from pathlib import Path
-from typing import Optional
 
 from src.config import config
 
@@ -189,7 +187,16 @@ class Categorizer:
         if lower in self._browser_names:
             return True
 
-        browser_keywords = {"chrome", "firefox", "edge", "safari", "brave", "opera", "vivaldi", "arc"}
+        browser_keywords = {
+            "chrome",
+            "firefox",
+            "edge",
+            "safari",
+            "brave",
+            "opera",
+            "vivaldi",
+            "arc",
+        }
         for keyword in browser_keywords:
             if keyword in lower:
                 return True
@@ -257,8 +264,7 @@ class Categorizer:
         new_version = new_rules.get("version", 0)
         if new_version <= self._version:
             logger.debug(
-                f"Skipping rules update: received v{new_version}, "
-                f"current v{self._version}"
+                f"Skipping rules update: received v{new_version}, " f"current v{self._version}"
             )
             return
 

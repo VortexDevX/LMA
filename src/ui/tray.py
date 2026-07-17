@@ -4,12 +4,10 @@ Provides a minimal tray icon with status display and controls.
 Uses pystray for cross-platform support.
 """
 
-import sys
-import threading
 import logging
+import threading
 import webbrowser
-from typing import Optional, Callable
-from io import BytesIO
+from collections.abc import Callable
 
 from src.config import config
 
@@ -101,14 +99,14 @@ class SystemTray:
         self._get_status = get_status_fn
         self._stop_fn = stop_fn
 
-        self._icon: Optional["pystray.Icon"] = None  # type: ignore
-        self._thread: Optional[threading.Thread] = None
+        self._icon: pystray.Icon | None = None  # type: ignore
+        self._thread: threading.Thread | None = None
         self._paused = False
         self._running = False
 
         # Callbacks that can be set by the agent core
-        self.on_pause: Optional[Callable[[], None]] = None
-        self.on_resume: Optional[Callable[[], None]] = None
+        self.on_pause: Callable[[], None] | None = None
+        self.on_resume: Callable[[], None] | None = None
 
     def start(self):
         """Start the system tray icon in a background thread."""

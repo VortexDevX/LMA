@@ -3,10 +3,13 @@
 ## Problem 1: Console Window Opening ✓ RESOLVED
 
 ### What Was Wrong
+
 The EXE was opening a terminal/console window when clicked because `console=True` in the PyInstaller spec file.
 
 ### What Was Fixed
+
 Changed [local-monitor-agent.spec](local-monitor-agent.spec#L99):
+
 ```python
 # Before:
 console=True   # ❌ Opens console window
@@ -16,6 +19,7 @@ console=False  # ✅ Silent background launch, tray icon only
 ```
 
 ### Result
+
 - EXE now launches silently in background
 - System tray icon appears immediately
 - No console window ever shown
@@ -26,7 +30,9 @@ console=False  # ✅ Silent background launch, tray icon only
 ## Problem 2: Code Signing (Not Signed) ✓ READY TO USE
 
 ### Current Status: ⚠️ NOT SIGNED
+
 Your current app is unsigned, which means:
+
 - **Windows**: Shows "Unknown Publisher" warning on first run
 - **macOS**: May be blocked by Gatekeeper (requires override)
 
@@ -35,6 +41,7 @@ Your current app is unsigned, which means:
 #### Option A: Self-Signed (Testing/Development) - 5 minutes
 
 **Step 1: Create Certificate** (PowerShell as Administrator)
+
 ```powershell
 # Navigate to project root
 cd "v:\Projects\EmployeeManagement\local-monitor-agent"
@@ -47,16 +54,19 @@ cd "v:\Projects\EmployeeManagement\local-monitor-agent"
 ```
 
 **Step 2: Build EXE**
+
 ```batch
 scripts\build_windows.bat
 ```
 
 **Step 3: Sign EXE**
+
 ```batch
 scripts\sign_windows.bat
 ```
 
-**Result**: 
+**Result**:
+
 - EXE is now signed with your certificate
 - Windows still shows "Unknown Publisher" (self-signed)
 - But you can verify it's from your certificate
@@ -68,6 +78,7 @@ scripts\sign_windows.bat
 For **zero warnings** and professional deployment:
 
 1. **Purchase Certificate** (~$150-400/year):
+
    - [Sectigo](https://sectigo.com/ssl-certificates-tls/code-signing)
    - [Digicert](https://www.digicert.com/code-signing)
    - [GlobalSign](https://www.globalsign.com/en/code-signing-certificate)
@@ -80,7 +91,8 @@ For **zero warnings** and professional deployment:
    ```
    (Use commercial .PFX instead of lma_cert.pfx)
 
-**Result**: 
+**Result**:
+
 - ✅ Zero warnings on Windows
 - ✅ Trusted publisher recognized
 - ✅ Professional deployment
@@ -90,27 +102,31 @@ For **zero warnings** and professional deployment:
 ## 🛠️ Scripts Created
 
 ### Certificate Management
-| Script | Purpose |
-|--------|---------|
+
+| Script                           | Purpose                                                 |
+| -------------------------------- | ------------------------------------------------------- |
 | `scripts/create_certificate.ps1` | **Create self-signed certificate** (interactive wizard) |
 
 ### Code Signing
-| Script | Purpose |
-|--------|---------|
+
+| Script                     | Purpose                         |
+| -------------------------- | ------------------------------- |
 | `scripts/sign_windows.bat` | **Sign the EXE** after building |
-| `scripts/sign_macos.sh` | Sign macOS app bundle |
+| `scripts/sign_macos.sh`    | Sign macOS app bundle           |
 
 ### Documentation
-| File | Purpose |
-|------|---------|
-| `docs/CODE_SIGNING.md` | Complete code signing guide (all platforms) |
-| `CODE_SIGNING_QUICK_START.md` | Quick reference (this directory) |
+
+| File                          | Purpose                                     |
+| ----------------------------- | ------------------------------------------- |
+| `docs/CODE_SIGNING.md`        | Complete code signing guide (all platforms) |
+| `CODE_SIGNING_QUICK_START.md` | Quick reference (this directory)            |
 
 ---
 
 ## 🚀 Quick Start Workflow
 
 ### Minimal (No Signing)
+
 ```batch
 cd v:\Projects\EmployeeManagement\local-monitor-agent
 scripts\build_windows.bat
@@ -120,6 +136,7 @@ scripts\build_windows.bat
 ```
 
 ### Complete (With Self-Signed)
+
 ```powershell
 cd v:\Projects\EmployeeManagement\local-monitor-agent
 
@@ -136,6 +153,7 @@ cd v:\Projects\EmployeeManagement\local-monitor-agent
 ```
 
 ### Verify Signing
+
 ```powershell
 Get-AuthenticodeSignature "dist\LocalMonitorAgent.exe"
 
@@ -150,10 +168,12 @@ Get-AuthenticodeSignature "dist\LocalMonitorAgent.exe"
 ## 📋 File Changes Summary
 
 ### Modified Files
-- **`local-monitor-agent.spec`** 
+
+- **`local-monitor-agent.spec`**
   - Line 99: `console=True` → `console=False`
 
 ### New Files Created
+
 - **`scripts/create_certificate.ps1`** - Interactive certificate wizard
 - **`scripts/sign_windows.bat`** - Code signing script
 - **`scripts/sign_macos.sh`** - macOS signing script
@@ -165,6 +185,7 @@ Get-AuthenticodeSignature "dist\LocalMonitorAgent.exe"
 ## ✨ What's Different Now
 
 ### Before Changes
+
 ```
 EXE Behavior:
   ❌ Opens console/terminal window
@@ -172,6 +193,7 @@ EXE Behavior:
 ```
 
 ### After Changes
+
 ```
 EXE Behavior:
   ✅ Launches silent, no console window
@@ -184,6 +206,7 @@ EXE Behavior:
 ## 📚 Additional Resources
 
 **For complete signing guide**: [`docs/CODE_SIGNING.md`](docs/CODE_SIGNING.md)
+
 - Self-signed certificate creation
 - Commercial certificate setup
 - macOS notarization
@@ -191,11 +214,13 @@ EXE Behavior:
 - Troubleshooting
 
 **For certificate creation**: [`scripts/create_certificate.ps1`](scripts/create_certificate.ps1)
+
 - Interactive wizard
 - Auto-generates passwords
 - Export public certificate
 
 **For signing**: [`scripts/sign_windows.bat`](scripts/sign_windows.bat)
+
 - Automatic SignTool detection
 - Timestamp server support
 - Verification included
@@ -228,12 +253,15 @@ A: Use strong passwords. Keep `.pfx` file in secure location. Don't commit to ve
 ## 🎯 Recommended Next Steps
 
 1. **Immediate**: Rebuild with new spec
+
    ```batch
    scripts\build_windows.bat
    ```
+
    (Console window is gone! ✓)
 
 2. **Testing**: Create self-signed certificate
+
    ```powershell
    .\scripts\create_certificate.ps1
    .\scripts\build_windows.bat

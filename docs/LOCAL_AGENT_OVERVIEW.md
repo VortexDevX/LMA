@@ -5,19 +5,23 @@
 The Local Monitoring Agent is a cross-platform background agent that collects productivity telemetry at metadata level only and syncs it to the backend API.
 
 Primary scope:
+
 - Application activity (foreground app, active/idle time, switches)
 - Network activity at domain level (no full URL)
 
 Out of scope:
+
 - Keystrokes, screenshots, page content, request/response bodies, clipboard, webcam/microphone capture
 
 ## 2. Current Project Status
 
 Implementation status:
+
 - Phases 0 through 16 implemented
 - End-to-end test suite passing in current workspace: 435 passed, 1 skipped
 
 Major delivered areas:
+
 - Platform abstraction (Windows/macOS/Linux)
 - Collectors, categorization, session aggregation, SQLite buffering, API sender
 - Tray UI, CLI, setup wizard GUI fallback
@@ -39,6 +43,7 @@ AppCollector + NetworkCollector
 ```
 
 Orchestration:
+
 - `src/agent_core.py` initializes all components and controls lifecycle
 - `src/main.py` handles CLI commands and normal background run
 
@@ -49,6 +54,7 @@ Orchestration:
 File: `src/agent_core.py`
 
 Responsibilities:
+
 - Startup/shutdown orchestration
 - First-launch setup path selection (CLI if terminal, GUI wizard if no terminal)
 - Watchdog checks for collector thread health
@@ -61,6 +67,7 @@ Responsibilities:
 File: `src/collectors/app_collector.py`
 
 Collects:
+
 - `app_name`
 - `process_id`
 - `active_duration_sec`
@@ -74,6 +81,7 @@ File: `src/collectors/network_collector.py`
 Collects domain-level telemetry using connection snapshots and DNS mapping.
 
 Current behavior:
+
 - Monitored ports: 80, 443, 8080, 8443
 - Protocols:
   - TCP established connections
@@ -86,6 +94,7 @@ Current behavior:
   - Size cap with eviction policy
 
 Produced fields:
+
 - `domain`
 - `app_name`
 - `bytes_uploaded`
@@ -93,6 +102,7 @@ Produced fields:
 - `duration_sec`
 
 Important limitation:
+
 - Per-domain byte attribution is estimated from total NIC deltas and active connection weighting (not packet-level exact accounting).
 
 ### 4.4 Categorization
@@ -106,6 +116,7 @@ Maps app names and domains to categories using `data/categories.json` rules and 
 File: `src/session/session_manager.py`
 
 Responsibilities:
+
 - Aggregates collector output
 - Tracks overall session totals
 - Buffers three payload types into SQLite
@@ -117,6 +128,7 @@ Responsibilities:
 File: `src/storage/sqlite_buffer.py`
 
 Tables:
+
 - `config`
 - `pending_sessions`
 - `pending_app_usage`
@@ -124,6 +136,7 @@ Tables:
 - `sent_log`
 
 Capabilities:
+
 - Thread-safe access
 - WAL mode
 - Backoff-ready retry metadata
@@ -135,11 +148,13 @@ Capabilities:
 File: `src/network/api_sender.py`
 
 Endpoints:
+
 - `POST /api/v1/telemetry/sessions`
 - `POST /api/v1/telemetry/app-usage`
 - `POST /api/v1/telemetry/domain-visits`
 
 Behavior:
+
 - Periodic send loop
 - Retry/backoff for transient failures
 - Permanent-fail classification for non-retryable payload errors
@@ -150,12 +165,14 @@ Behavior:
 ### 4.8 Setup Flows
 
 CLI setup:
+
 - File: `src/setup/first_launch.py`
 - Prompts: employee_id, password, TOTP
 - Auth endpoint: `POST /api/v1/auth/login`
 - Device registration endpoint: `POST /api/v1/devices/`
 
 GUI setup:
+
 - File: `src/ui/setup_wizard.py`
 - Used when no interactive terminal is available and tkinter exists
 - Writes identity/device config locally after successful login
@@ -165,6 +182,7 @@ GUI setup:
 File: `src/ui/tray.py`
 
 Provides:
+
 - Dynamic status text
 - Employee name/id display
 - Pause/resume toggle
@@ -177,6 +195,7 @@ Provides:
 File: `src/utils/autostart.py`
 
 Platform behavior:
+
 - Windows: `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`
 - macOS: `~/Library/LaunchAgents/com.company.localmonitoragent.plist`
 - Linux: `~/.config/autostart/localmonitoragent.desktop`
@@ -186,6 +205,7 @@ Platform behavior:
 File: `src/utils/updater.py`
 
 Capabilities:
+
 - Update availability check (`GET /api/v1/agent/latest-version`)
 - Version comparison
 - Binary download + SHA-256 verification
@@ -252,6 +272,7 @@ Domain telemetry is domain-only. Full URLs/paths/queries are not stored.
 ## 6. Security and Hardening
 
 Implemented hardening controls include:
+
 - API key migration from plaintext env to machine-tied obfuscated value in SQLite config (`src/utils/crypto.py`)
 - BOM-safe env loading for Windows-created `.env`
 - Linux/macOS restrictive DB file permissions
@@ -262,22 +283,26 @@ Implemented hardening controls include:
 ## 7. Runtime Paths
 
 Windows:
+
 - Data dir: `%APPDATA%\\LocalMonitorAgent`
 - DB: `%APPDATA%\\LocalMonitorAgent\\agent.db`
 - Logs: `%APPDATA%\\LocalMonitorAgent\\logs\\agent.log`
 - Config: `%APPDATA%\\LocalMonitorAgent\\.env`
 
 macOS:
+
 - Data dir: `~/Library/Application Support/LocalMonitorAgent`
 - Logs: `~/Library/Logs/LocalMonitorAgent`
 
 Linux:
+
 - Data dir: `~/.local/share/LocalMonitorAgent`
 - Logs: `~/.local/share/LocalMonitorAgent/logs`
 
 ## 8. CLI Surface
 
 From `src/main.py`:
+
 - `--version`
 - `--status`
 - `--reset`

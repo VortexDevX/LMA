@@ -3,11 +3,10 @@ Tests for the Session Manager.
 Run with: python -m pytest tests/test_session_manager.py -v
 """
 
-import time
 import json
+import time
+
 import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 from src.session.session_manager import SessionManager
 from src.storage.sqlite_buffer import SQLiteBuffer
@@ -235,12 +234,16 @@ class TestDomainVisitBuffering:
 
     def test_multiple_domain_visits_accumulate(self, manager):
         manager.buffer_domain_visit(
-            domain="github.com", app_name="Chrome",
-            bytes_uploaded=1000, bytes_downloaded=5000,
+            domain="github.com",
+            app_name="Chrome",
+            bytes_uploaded=1000,
+            bytes_downloaded=5000,
         )
         manager.buffer_domain_visit(
-            domain="youtube.com", app_name="Chrome",
-            bytes_uploaded=500, bytes_downloaded=50000,
+            domain="youtube.com",
+            app_name="Chrome",
+            bytes_uploaded=500,
+            bytes_downloaded=50000,
         )
         status = manager.get_status()
         assert status["bytes_uploaded"] == 1500
@@ -315,10 +318,16 @@ class TestSessionPayloadFormat:
         assert len(records) >= 1
 
         required_fields = {
-            "employee_id", "device_mac", "session_start", "session_end",
-            "active_duration_sec", "idle_duration_sec",
-            "bytes_uploaded", "bytes_downloaded",
-            "avg_bandwidth_kbps", "source",
+            "employee_id",
+            "device_mac",
+            "session_start",
+            "session_end",
+            "active_duration_sec",
+            "idle_duration_sec",
+            "bytes_uploaded",
+            "bytes_downloaded",
+            "avg_bandwidth_kbps",
+            "source",
         }
 
         for record in records:

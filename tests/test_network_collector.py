@@ -3,17 +3,16 @@ Tests for the Network / Domain Collector.
 Run with: python -m pytest tests/test_network_collector.py -v
 """
 
-import time
 import socket
-import pytest
+import time
 from types import SimpleNamespace
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from src.collectors.network_collector import (
-    NetworkCollector,
-    DomainRecord,
-    ConnectionSnapshot,
     MONITORED_PORTS,
+    ConnectionSnapshot,
+    DomainRecord,
+    NetworkCollector,
 )
 
 

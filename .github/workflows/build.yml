@@ -5,7 +5,7 @@ on:
     branches:
       - main
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -23,17 +23,14 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          python-version: "3.12"
+          cache: "pip"
 
       - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-
-      - name: Create .env for build
-        run: echo "${{ secrets.ENV_FILE }}" > .env
 
       - name: Build executable
         run: pyinstaller local-monitor-agent.spec --noconfirm
@@ -87,8 +84,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          python-version: "3.12"
+          cache: "pip"
 
       - name: Install system dependencies
         run: |
@@ -102,9 +99,6 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-
-      - name: Create .env for build
-        run: echo "${{ secrets.ENV_FILE }}" > .env
 
       - name: Build executable
         run: pyinstaller local-monitor-agent.spec --noconfirm
@@ -148,8 +142,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          python-version: "3.12"
+          cache: "pip"
 
       - name: Install dependencies
         run: |
@@ -157,9 +151,6 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
           pip install pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-Quartz
-
-      - name: Create .env for build
-        run: echo "${{ secrets.ENV_FILE }}" > .env
 
       - name: Build app bundle
         run: pyinstaller local-monitor-agent.spec --noconfirm
@@ -204,7 +195,7 @@ jobs:
   release:
     needs: [build-windows, build-linux, build-macos]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -214,11 +205,7 @@ jobs:
       - name: Set Release Tag
         shell: bash
         run: |
-          if [[ $GITHUB_REF == refs/tags/v* ]]; then
-            echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-          else
-            echo "TAG_NAME=v1.0.0" >> $GITHUB_ENV
-          fi
+          echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
       - name: Delete existing release (if any)
         env:

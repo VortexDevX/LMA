@@ -3,11 +3,12 @@ Tests for the System Tray.
 Run with: python -m pytest tests/test_tray.py -v
 """
 
-import pytest # type: ignore
 from unittest.mock import MagicMock, patch
 
+import pytest  # type: ignore
+
 from src.config import config
-from src.ui.tray import SystemTray, is_tray_available, _create_icon_image, _TRAY_AVAILABLE
+from src.ui.tray import _TRAY_AVAILABLE, SystemTray, _create_icon_image, is_tray_available
 
 
 class TestTrayAvailability:
@@ -88,36 +89,44 @@ class TestTrayMenuText:
     """Test dynamic menu text generation."""
 
     def test_status_text_running(self):
-        status_fn = MagicMock(return_value={
-            "session": {"running": True, "pending_records": 0},
-        })
+        status_fn = MagicMock(
+            return_value={
+                "session": {"running": True, "pending_records": 0},
+            }
+        )
         tray = SystemTray(get_status_fn=status_fn, stop_fn=MagicMock())
 
         text = tray._status_text(None)
         assert "Running" in text
 
     def test_status_text_running_with_pending(self):
-        status_fn = MagicMock(return_value={
-            "session": {"running": True, "pending_records": 5},
-        })
+        status_fn = MagicMock(
+            return_value={
+                "session": {"running": True, "pending_records": 5},
+            }
+        )
         tray = SystemTray(get_status_fn=status_fn, stop_fn=MagicMock())
 
         text = tray._status_text(None)
         assert "5 pending" in text
 
     def test_status_text_stopped(self):
-        status_fn = MagicMock(return_value={
-            "session": {"running": False},
-        })
+        status_fn = MagicMock(
+            return_value={
+                "session": {"running": False},
+            }
+        )
         tray = SystemTray(get_status_fn=status_fn, stop_fn=MagicMock())
 
         text = tray._status_text(None)
         assert "Stopped" in text
 
     def test_status_text_paused(self):
-        status_fn = MagicMock(return_value={
-            "session": {"running": True, "pending_records": 0},
-        })
+        status_fn = MagicMock(
+            return_value={
+                "session": {"running": True, "pending_records": 0},
+            }
+        )
         tray = SystemTray(get_status_fn=status_fn, stop_fn=MagicMock())
         tray._paused = True
 
@@ -132,9 +141,11 @@ class TestTrayMenuText:
         assert "Unknown" in text
 
     def test_employee_text(self):
-        status_fn = MagicMock(return_value={
-            "session": {"employee_id": 42},
-        })
+        status_fn = MagicMock(
+            return_value={
+                "session": {"employee_id": 42},
+            }
+        )
         tray = SystemTray(get_status_fn=status_fn, stop_fn=MagicMock())
 
         text = tray._employee_text(None)
@@ -162,7 +173,7 @@ class TestTrayMenuText:
     def test_about_text(self):
         tray = SystemTray(get_status_fn=MagicMock(), stop_fn=MagicMock())
         text = tray._about_text(None)
-        assert config.AGENT_VERSION in text # type: ignore
+        assert config.AGENT_VERSION in text  # type: ignore
 
 
 class TestTrayPauseToggle:
@@ -244,7 +255,7 @@ class TestTrayViewStats:
         mock_wb.open.assert_called_once()
 
         url = mock_wb.open.call_args[0][0]
-        assert config.API_BASE_URL in url # type: ignore
+        assert config.API_BASE_URL in url  # type: ignore
 
     @patch("src.ui.tray.webbrowser")
     def test_view_stats_handles_error(self, mock_wb):

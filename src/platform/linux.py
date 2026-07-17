@@ -3,22 +3,20 @@ Linux-specific platform implementation.
 Uses /proc filesystem, xdotool/xprintidle, and psutil.
 """
 
-import subprocess
-import socket
 import logging
-import uuid
-import platform
-import re
 import os
+import platform
+import socket
+import subprocess
+import uuid
 from pathlib import Path
-from typing import Optional
 
 import psutil
 
 from src.platform.base import (
-    PlatformBase,
     ForegroundAppInfo,
     NetworkConnection,
+    PlatformBase,
     SystemInfo,
 )
 
@@ -104,14 +102,14 @@ class LinuxPlatform(PlatformBase):
 
     # --- Foreground App ---
 
-    def get_foreground_app(self) -> Optional[ForegroundAppInfo]:
+    def get_foreground_app(self) -> ForegroundAppInfo | None:
         if self._display_server == "x11" and self._has_xdotool:
             return self._get_foreground_x11()
         elif self._display_server == "wayland":
             return self._get_foreground_wayland()
         return self._get_foreground_proc()
 
-    def _get_foreground_x11(self) -> Optional[ForegroundAppInfo]:
+    def _get_foreground_x11(self) -> ForegroundAppInfo | None:
         try:
             # Get active window ID
             result = subprocess.run(
@@ -150,7 +148,7 @@ class LinuxPlatform(PlatformBase):
             logger.debug(f"X11 foreground detection failed: {e}")
             return None
 
-    def _get_foreground_wayland(self) -> Optional[ForegroundAppInfo]:
+    def _get_foreground_wayland(self) -> ForegroundAppInfo | None:
         """
         Wayland foreground detection is compositor-dependent.
         Try common methods: swaymsg (Sway), gdbus (GNOME).
@@ -165,6 +163,7 @@ class LinuxPlatform(PlatformBase):
             )
             if result.returncode == 0:
                 import json
+
                 tree = json.loads(result.stdout)
                 focused = self._find_focused_sway(tree)
                 if focused:
@@ -184,7 +183,7 @@ class LinuxPlatform(PlatformBase):
         # Fallback: read /proc for largest CPU consumer (rough heuristic)
         return self._get_foreground_proc()
 
-    def _find_focused_sway(self, node: dict) -> Optional[dict]:
+    def _find_focused_sway(self, node: dict) -> dict | None:
         """Recursively find the focused node in sway tree."""
         if node.get("focused"):
             return node
@@ -194,7 +193,7 @@ class LinuxPlatform(PlatformBase):
                 return result
         return None
 
-    def _get_foreground_proc(self) -> Optional[ForegroundAppInfo]:
+    def _get_foreground_proc(self) -> ForegroundAppInfo | None:
         """
         Last resort: find the process using most CPU that looks like a GUI app.
         This is imprecise but better than nothing.
@@ -257,6 +256,7 @@ class LinuxPlatform(PlatformBase):
                 return 0.0
 
             import time
+
             now = time.time()
             newest = 0.0
 
@@ -338,9 +338,7 @@ class LinuxPlatform(PlatformBase):
 
             # Fallback
             mac_int = uuid.getnode()
-            return ":".join(
-                ["{:02x}".format((mac_int >> i) & 0xFF) for i in range(0, 48, 8)][::-1]
-            )
+            return ":".join([f"{(mac_int >> i) & 0xFF:02x}" for i in range(0, 48, 8)][::-1])
         except Exception:
             return "00:00:00:00:00:00"
 
@@ -408,7 +406,7 @@ class LinuxPlatform(PlatformBase):
 
     # --- Process Utilities ---
 
-    def get_process_name(self, pid: int) -> Optional[str]:
+    def get_process_name(self, pid: int) -> str | None:
         if pid in self._process_cache:
             return self._process_cache[pid]
 

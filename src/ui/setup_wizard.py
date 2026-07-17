@@ -4,12 +4,10 @@ tkinter-based login and device registration for first launch.
 Used when no interactive terminal is available (windowed exe mode).
 """
 
+import logging
 import sys
 import threading
-import logging
 from pathlib import Path
-
-from src.config import config
 
 logger = logging.getLogger("agent.ui.wizard")
 
@@ -105,19 +103,15 @@ class SetupWizard:
         frame.pack(fill="both", expand=True)
 
         # Title
-        ttk.Label(  # type: ignore
-            frame, text="Local Monitor Agent", font=("", 14, "bold")
-        ).pack(pady=(0, 5))
-        ttk.Label(frame, text="First-time setup", font=("", 10)).pack(  # type: ignore
-            pady=(0, 15)
+        ttk.Label(frame, text="Local Monitor Agent", font=("", 14, "bold")).pack(  # type: ignore
+            pady=(0, 5)
         )
+        ttk.Label(frame, text="First-time setup", font=("", 10)).pack(pady=(0, 15))  # type: ignore
 
         # Device info box
         dev = ttk.LabelFrame(frame, text="Device", padding=8)  # type: ignore
         dev.pack(fill="x", pady=(0, 15))
-        ttk.Label(dev, text=f"Host:  {self._system_info.hostname}").pack(  # type: ignore
-            anchor="w"
-        )
+        ttk.Label(dev, text=f"Host:  {self._system_info.hostname}").pack(anchor="w")  # type: ignore
         ttk.Label(dev, text=f"MAC:   {self._system_info.mac_address}").pack(  # type: ignore
             anchor="w"
         )
@@ -190,53 +184,16 @@ class SetupWizard:
     def _do_login(self, emp_code: str, password: str, totp: str):
         """Perform login + device registration in background thread."""
         try:
-            # Step 0: Resolve employee code to ID
-            status, body = self._sender.get_immediate_raw(
-                f"/api/v1/employees/by-code/{emp_code}"
-            )
-            if status is None:
-                self._root.after(  # type: ignore
-                    0, self._on_login_error, "Could not reach server. Check network."
-                )
-                return
-            if status in (401, 403):
-                self._root.after(  # type: ignore
-                    0, self._on_login_error,
-                    f"Unauthorized (HTTP {status}). Check API key permissions."
-                )
-                return
-            if status == 404:
-                self._root.after(0, self._on_login_error, "Employee not found.")  # type: ignore
-                return
-            if status < 200 or status >= 300:
-                self._root.after(  # type: ignore
-                    0, self._on_login_error,
-                    f"Employee lookup failed (HTTP {status})."
-                )
-                return
-
-            info = self._sender.get_immediate(
-                f"/api/v1/employees/by-code/{emp_code}"
-            )
-            if info is None:
-                self._root.after(0, self._on_login_error, "Employee lookup failed.")  # type: ignore
-                return
-            if info.get("is_active") is False:
-                self._root.after(0, self._on_login_error, "Your account is inactive.")  # type: ignore
-                return
-            emp_id = info.get("id")
-            if not isinstance(emp_id, int):
-                self._root.after(0, self._on_login_error, "Employee not found.")  # type: ignore
-                return
-
-            # Step 1: Login
+            # Step 1: Login directly by employee code. A separate account lookup
+            # is both unnecessary and an account-enumeration risk.
             result = self._sender.send_immediate(
                 "/api/v1/auth/login",
                 {
-                    "employee_id": emp_id,
+                    "employee_code": emp_code,
                     "password": password,
                     "totp_code": totp,
                 },
+                include_errors=True,
             )
 
             if result is None:
@@ -248,6 +205,13 @@ class SetupWizard:
             if not result.get("access_token"):
                 msg = result.get("detail", "Invalid credentials.")
                 self._root.after(0, self._on_login_error, msg)  # type: ignore
+                return
+
+            emp_id = result.get("employee_id")
+            if not isinstance(emp_id, int):
+                self._root.after(  # type: ignore
+                    0, self._on_login_error, "Login response did not include an identity."
+                )
                 return
 
             # Step 2: Register device (best-effort)
@@ -271,8 +235,6 @@ class SetupWizard:
                 self._buffer.set_config("employee_name", result["full_name"])
             if result.get("employee_code"):
                 self._buffer.set_config("employee_code", result["employee_code"])
-            if result.get("access_token"):
-                self._buffer.set_config("access_token", result["access_token"])
 
             name = result.get("full_name", f"Employee #{emp_id}")
             self._root.after(0, self._on_login_success, name)  # type: ignore
@@ -309,9 +271,7 @@ class SetupWizard:
         ttk.Label(frame, text="Setup Complete!", font=("", 16, "bold")).pack(  # type: ignore
             pady=(0, 10)
         )
-        ttk.Label(frame, text=f"Welcome, {name}", font=("", 11)).pack(  # type: ignore
-            pady=(0, 20)
-        )
+        ttk.Label(frame, text=f"Welcome, {name}", font=("", 11)).pack(pady=(0, 20))  # type: ignore
 
         info = ttk.Frame(frame)  # type: ignore
         info.pack(fill="x", pady=(0, 15))

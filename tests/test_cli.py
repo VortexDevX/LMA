@@ -2,10 +2,9 @@
 Tests for CLI arguments in main.py.
 """
 
-import sys
 import os
-import pytest # type: ignore
-from unittest.mock import patch, MagicMock
+import sys
+from unittest.mock import patch
 
 
 class TestCmdVersion:
@@ -33,6 +32,7 @@ class TestCmdStatus:
 
         with patch("src.config.config", mock_config):
             from src.main import _cmd_status
+
             code = _cmd_status()
 
         assert code == 0
@@ -62,6 +62,7 @@ class TestCmdStatus:
 
         with patch("src.config.config", mock_config):
             from src.main import _cmd_status
+
             code = _cmd_status()
 
         assert code == 0
@@ -85,6 +86,7 @@ class TestCmdStatus:
 
         with patch("src.config.config", mock_config):
             from src.main import _cmd_status
+
             code = _cmd_status()
 
         assert code == 0
@@ -105,6 +107,7 @@ class TestCmdReset:
 
         with patch("src.config.config", mock_config):
             from src.main import _cmd_reset
+
             code = _cmd_reset()
 
         assert code == 0
@@ -133,6 +136,7 @@ class TestCmdReset:
 
         with patch("src.config.config", mock_config):
             from src.main import _cmd_reset
+
             code = _cmd_reset()
 
         assert code == 0
@@ -164,6 +168,7 @@ class TestCmdReset:
 
         with patch("src.config.config", mock_config):
             from src.main import _cmd_reset
+
             code = _cmd_reset()
 
         assert code == 0
@@ -193,6 +198,7 @@ class TestCmdReset:
 
         with patch("src.config.config", mock_config):
             from src.main import _cmd_reset
+
             code = _cmd_reset()
 
         assert code == 1
@@ -213,10 +219,13 @@ class TestCmdUninstall:
 
         monkeypatch.setattr("builtins.input", lambda _: "n")
 
-        with patch("src.config.config", mock_config), \
-             patch("src.utils.autostart.is_autostart_enabled", return_value=True), \
-             patch("src.utils.autostart.unregister_autostart", return_value=True):
+        with (
+            patch("src.config.config", mock_config),
+            patch("src.utils.autostart.is_autostart_enabled", return_value=True),
+            patch("src.utils.autostart.unregister_autostart", return_value=True),
+        ):
             from src.main import _cmd_uninstall
+
             code = _cmd_uninstall()
 
         assert code == 0
@@ -238,6 +247,7 @@ class TestCmdUninstall:
 
         with patch("src.config.config", mock_config):
             from src.main import _cmd_uninstall
+
             code = _cmd_uninstall()
 
         assert code == 1
@@ -258,10 +268,13 @@ class TestCmdSetup:
             LOCK_FILE=tmp_path / "agent.lock",
         )
 
-        with patch("src.config.config", mock_config), \
-             patch("src.setup.first_launch.run_first_launch", return_value=True) as mock_fl, \
-             patch("src.utils.autostart.register_autostart", return_value=False):
+        with (
+            patch("src.config.config", mock_config),
+            patch("src.setup.first_launch.run_first_launch", return_value=True) as mock_fl,
+            patch("src.utils.autostart.register_autostart", return_value=False),
+        ):
             from src.main import _cmd_setup
+
             code = _cmd_setup()
 
         assert code == 0
@@ -272,36 +285,41 @@ class TestParseArgs:
     def test_version_flag(self):
         with patch("sys.argv", ["agent", "--version"]):
             from src.main import _parse_args
+
             args = _parse_args()
             assert args.version is True
 
     def test_status_flag(self):
         with patch("sys.argv", ["agent", "--status"]):
             from src.main import _parse_args
+
             args = _parse_args()
             assert args.status is True
 
     def test_reset_flag(self):
         with patch("sys.argv", ["agent", "--reset"]):
             from src.main import _parse_args
+
             args = _parse_args()
             assert args.reset is True
 
     def test_uninstall_flag(self):
         with patch("sys.argv", ["agent", "--uninstall"]):
             from src.main import _parse_args
+
             args = _parse_args()
             assert args.uninstall is True
 
     def test_setup_flag(self):
         with patch("sys.argv", ["agent", "--setup"]):
             from src.main import _parse_args
+
             args = _parse_args()
             assert args.setup is True
 
     def test_no_flags(self):
         with patch("sys.argv", ["agent"]):
             from src.main import _parse_args
+
             args = _parse_args()
-            assert not any([args.version, args.status, args.reset,
-                           args.uninstall, args.setup])
+            assert not any([args.version, args.status, args.reset, args.uninstall, args.setup])

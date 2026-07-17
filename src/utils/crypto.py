@@ -3,11 +3,11 @@ Simple API key obfuscation using XOR with machine-specific salt.
 Not cryptographically secure — just prevents casual plaintext reading.
 """
 
-import hashlib
 import base64
+import hashlib
+import logging
 import socket
 import uuid
-import logging
 
 logger = logging.getLogger("agent.crypto")
 
@@ -20,7 +20,7 @@ def get_machine_salt() -> bytes:
         hostname = "unknown"
 
     mac = hex(uuid.getnode())
-    raw = f"{hostname}:{mac}:localmonitoragent".encode("utf-8")
+    raw = f"{hostname}:{mac}:localmonitoragent".encode()
     return hashlib.sha256(raw).digest()
 
 

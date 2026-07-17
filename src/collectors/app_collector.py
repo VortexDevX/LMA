@@ -4,11 +4,10 @@ Polls the foreground app every second, tracks focus duration,
 idle time, and app switch frequency.
 """
 
-import time
-import threading
 import logging
-from dataclasses import dataclass, field
-from typing import Optional
+import threading
+import time
+from dataclasses import dataclass
 
 from src.config import config
 from src.platform import get_platform
@@ -20,6 +19,7 @@ logger = logging.getLogger("agent.collector.app")
 @dataclass
 class AppRecord:
     """Accumulated usage data for a single app in one collection window."""
+
     app_name: str
     process_id: int
     active_duration_sec: float = 0.0
@@ -55,12 +55,12 @@ class AppCollector:
         self._apps: dict[str, AppRecord] = {}
 
         # Previous poll state (for detecting switches)
-        self._prev_app_name: Optional[str] = None
+        self._prev_app_name: str | None = None
         self._prev_poll_time: float = 0.0
 
         # Thread control
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
         # Load ignored apps list
         categories = config.load_categories()

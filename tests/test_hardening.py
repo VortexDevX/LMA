@@ -4,24 +4,22 @@ Covers crypto, batch operations, DNS cache management,
 auth cooldown, watchdog, memory checks, and stale record recovery.
 """
 
-import time
-import sqlite3
-import threading
 import sys
-import pytest # type: ignore
-from pathlib import Path
-from unittest.mock import patch, MagicMock, PropertyMock
+import time
+from unittest.mock import MagicMock, patch
 
+import pytest  # type: ignore
 
 # ============================================================
 # Crypto tests
 # ============================================================
 
+
 class TestCrypto:
     """Tests for API key obfuscation utilities."""
 
     def test_roundtrip(self):
-        from src.utils.crypto import obfuscate, deobfuscate, get_machine_salt
+        from src.utils.crypto import deobfuscate, get_machine_salt, obfuscate
 
         salt = get_machine_salt()
         plaintext = "my_secret_api_key_123"
@@ -40,7 +38,7 @@ class TestCrypto:
         assert enc_a != enc_b
 
     def test_special_characters(self):
-        from src.utils.crypto import obfuscate, deobfuscate, get_machine_salt
+        from src.utils.crypto import deobfuscate, get_machine_salt, obfuscate
 
         salt = get_machine_salt()
         plaintext = "key-with-$pecial!chars@2024#&*()"
@@ -48,7 +46,7 @@ class TestCrypto:
         assert deobfuscate(encrypted, salt) == plaintext
 
     def test_unicode_key(self):
-        from src.utils.crypto import obfuscate, deobfuscate, get_machine_salt
+        from src.utils.crypto import deobfuscate, get_machine_salt, obfuscate
 
         salt = get_machine_salt()
         plaintext = "キー_with_日本語"
@@ -56,14 +54,14 @@ class TestCrypto:
         assert deobfuscate(encrypted, salt) == plaintext
 
     def test_empty_string(self):
-        from src.utils.crypto import obfuscate, deobfuscate, get_machine_salt
+        from src.utils.crypto import deobfuscate, get_machine_salt, obfuscate
 
         salt = get_machine_salt()
         assert obfuscate("", salt) == ""
         assert deobfuscate("", salt) == ""
 
     def test_long_key(self):
-        from src.utils.crypto import obfuscate, deobfuscate, get_machine_salt
+        from src.utils.crypto import deobfuscate, get_machine_salt, obfuscate
 
         salt = get_machine_salt()
         plaintext = "A" * 500
@@ -71,7 +69,7 @@ class TestCrypto:
         assert deobfuscate(encrypted, salt) == plaintext
 
     def test_obfuscated_is_not_plaintext(self):
-        from src.utils.crypto import obfuscate, get_machine_salt
+        from src.utils.crypto import get_machine_salt, obfuscate
 
         salt = get_machine_salt()
         plaintext = "visible_api_key"
@@ -92,11 +90,13 @@ class TestCrypto:
 # SQLite batch marking tests
 # ============================================================
 
+
 class TestBatchMarking:
     """Tests for batch mark_sent/mark_failed/mark_permanently_failed."""
 
     def _make_buffer(self, tmp_path):
         from src.storage.sqlite_buffer import SQLiteBuffer
+
         return SQLiteBuffer(db_path=tmp_path / "test.db")
 
     def test_mark_sent_batch(self, tmp_path):
@@ -126,9 +126,7 @@ class TestBatchMarking:
 
         pending = buf.get_pending("pending_app_usage")
         assert len(pending) == 0  # status is now 'failed', not 'pending'
-
-        from src.config import config
-        retryable = buf.get_retryable("pending_app_usage", limit=50)
+        buf.get_retryable("pending_app_usage", limit=50)
         # May or may not be retryable depending on backoff timing
         # But status should be 'failed'
         stats = buf.get_stats()
@@ -166,7 +164,7 @@ class TestBatchMarking:
         id2 = buf.insert_pending("pending_sessions", {"b": 2})
         id3 = buf.insert_pending("pending_sessions", {"c": 3})
 
-        buf.mark_sent_batch("pending_sessions", [id1, id3]) # type: ignore
+        buf.mark_sent_batch("pending_sessions", [id1, id3])  # type: ignore
 
         pending = buf.get_pending("pending_sessions")
         assert len(pending) == 1
@@ -177,6 +175,7 @@ class TestBatchMarking:
 # ============================================================
 # Stale 'sending' record reset tests
 # ============================================================
+
 
 class TestStaleSendingReset:
     """Tests for resetting records stuck in 'sending' status on init."""
@@ -190,11 +189,11 @@ class TestStaleSendingReset:
         buf = SQLiteBuffer(db_path=db_path)
         rid = buf.insert_pending("pending_sessions", {"test": "data"})
         with buf._lock:
-            buf._conn.execute( # type: ignore
+            buf._conn.execute(  # type: ignore
                 "UPDATE pending_sessions SET status = 'sending' WHERE id = ?",
                 (rid,),
             )
-            buf._conn.commit() # type: ignore
+            buf._conn.commit()  # type: ignore
         buf.close()
 
         # Create new buffer pointing to same DB — should reset stale records
@@ -214,11 +213,11 @@ class TestStaleSendingReset:
         for table in ["pending_sessions", "pending_app_usage", "pending_domain_visits"]:
             rid = buf.insert_pending(table, {"table": table})
             with buf._lock:
-                buf._conn.execute( # type: ignore
+                buf._conn.execute(  # type: ignore
                     f"UPDATE {table} SET status = 'sending' WHERE id = ?",
                     (rid,),
                 )
-                buf._conn.commit() # type: ignore
+                buf._conn.commit()  # type: ignore
         buf.close()
 
         # Reopen
@@ -234,13 +233,14 @@ class TestStaleSendingReset:
 # File permissions tests
 # ============================================================
 
+
 class TestFilePermissions:
     """Tests for restrictive file permissions on Linux/macOS."""
 
     @pytest.mark.skipif(sys.platform == "win32", reason="Permissions not set on Windows")
     def test_db_file_permissions(self, tmp_path):
+
         from src.storage.sqlite_buffer import SQLiteBuffer
-        import stat
 
         db_path = tmp_path / "test.db"
         buf = SQLiteBuffer(db_path=db_path)
@@ -255,14 +255,17 @@ class TestFilePermissions:
 # DNS cache management tests
 # ============================================================
 
+
 class TestDNSCacheManagement:
     """Tests for DNS cache eviction and size cap."""
 
     def _make_collector(self):
         """Create a NetworkCollector with mocked dependencies."""
-        with patch("src.collectors.network_collector.get_platform") as mock_plat, \
-             patch("src.collectors.network_collector.Categorizer"), \
-             patch("src.collectors.network_collector.config") as mock_config:
+        with (
+            patch("src.collectors.network_collector.get_platform") as mock_plat,
+            patch("src.collectors.network_collector.Categorizer"),
+            patch("src.collectors.network_collector.config") as mock_config,
+        ):
 
             mock_plat_instance = MagicMock()
             mock_plat.return_value = mock_plat_instance
@@ -273,6 +276,7 @@ class TestDNSCacheManagement:
 
             # Patch _load_system_dns_cache to avoid subprocess calls
             from src.collectors.network_collector import NetworkCollector
+
             with patch.object(NetworkCollector, "_load_system_dns_cache"):
                 collector = NetworkCollector()
 
@@ -352,18 +356,20 @@ class TestDNSCacheManagement:
 # Auth cooldown tests
 # ============================================================
 
+
 class TestAuthCooldown:
     """Tests for auth cooldown on 401/403 responses."""
 
     def _make_sender(self, tmp_path):
-        from src.storage.sqlite_buffer import SQLiteBuffer
         from src.network.api_sender import APISender
+        from src.storage.sqlite_buffer import SQLiteBuffer
+
         buf = SQLiteBuffer(db_path=tmp_path / "test.db")
         sender = APISender(buf)
         return sender, buf
 
     def test_auth_cooldown_activates_on_401(self, tmp_path):
-        import responses as resp # type: ignore
+        import responses as resp  # type: ignore
 
         sender, buf = self._make_sender(tmp_path)
         buf.insert_pending("pending_sessions", {"test": "data"})
@@ -398,7 +404,7 @@ class TestAuthCooldown:
         buf.close()
 
     def test_force_send_bypasses_cooldown(self, tmp_path):
-        import responses as resp # type: ignore
+        import responses as resp  # type: ignore
 
         sender, buf = self._make_sender(tmp_path)
         buf.insert_pending("pending_sessions", {"test": "data"})
@@ -422,7 +428,8 @@ class TestAuthCooldown:
 
     def test_auth_cooldown_stops_remaining_tables(self, tmp_path):
         """After 401 on any table, remaining tables should be skipped."""
-        import responses as resp # type: ignore
+        import responses as resp  # type: ignore
+
         from src.network.api_sender import ENDPOINTS
 
         sender, buf = self._make_sender(tmp_path)
@@ -465,14 +472,15 @@ class TestAuthCooldown:
 # Last sync tracking tests
 # ============================================================
 
+
 class TestLastSyncTracking:
     """Tests for last_successful_sync config writing."""
 
     def test_last_sync_written_on_success(self, tmp_path):
-        import responses as resp # type: ignore
+        import responses as resp  # type: ignore
 
-        from src.storage.sqlite_buffer import SQLiteBuffer
         from src.network.api_sender import APISender
+        from src.storage.sqlite_buffer import SQLiteBuffer
 
         buf = SQLiteBuffer(db_path=tmp_path / "test.db")
         sender = APISender(buf)
@@ -494,10 +502,10 @@ class TestLastSyncTracking:
         buf.close()
 
     def test_last_sync_not_written_on_failure(self, tmp_path):
-        import responses as resp # type: ignore
+        import responses as resp  # type: ignore
 
-        from src.storage.sqlite_buffer import SQLiteBuffer
         from src.network.api_sender import APISender
+        from src.storage.sqlite_buffer import SQLiteBuffer
 
         buf = SQLiteBuffer(db_path=tmp_path / "test.db")
         sender = APISender(buf)
@@ -522,25 +530,29 @@ class TestLastSyncTracking:
 # Watchdog tests
 # ============================================================
 
+
 class TestWatchdog:
     """Tests for SessionManager.check_health() watchdog."""
 
     def test_check_health_all_alive(self):
         """check_health returns True when everything is running."""
-        with patch("src.session.session_manager.get_platform"), \
-             patch("src.session.session_manager.Categorizer"), \
-             patch("src.session.session_manager.AppCollector") as MockApp, \
-             patch("src.session.session_manager.NetworkCollector") as MockNet:
+        with (
+            patch("src.session.session_manager.get_platform"),
+            patch("src.session.session_manager.Categorizer"),
+            patch("src.session.session_manager.AppCollector") as mock_app_cls,
+            patch("src.session.session_manager.NetworkCollector") as mock_net_cls,
+        ):
 
-            mock_app = MockApp.return_value
+            mock_app = mock_app_cls.return_value
             mock_app._running = True
             mock_app.is_thread_alive = True
 
-            mock_net = MockNet.return_value
+            mock_net = mock_net_cls.return_value
             mock_net._running = True
             mock_net.is_thread_alive = True
 
             from src.session.session_manager import SessionManager
+
             buf = MagicMock()
             buf.get_config.return_value = None
             sm = SessionManager(buf)
@@ -552,20 +564,23 @@ class TestWatchdog:
 
     def test_check_health_restarts_dead_app_collector(self):
         """check_health restarts dead app collector."""
-        with patch("src.session.session_manager.get_platform"), \
-             patch("src.session.session_manager.Categorizer"), \
-             patch("src.session.session_manager.AppCollector") as MockApp, \
-             patch("src.session.session_manager.NetworkCollector") as MockNet:
+        with (
+            patch("src.session.session_manager.get_platform"),
+            patch("src.session.session_manager.Categorizer"),
+            patch("src.session.session_manager.AppCollector") as mock_app_cls,
+            patch("src.session.session_manager.NetworkCollector") as mock_net_cls,
+        ):
 
-            mock_app = MockApp.return_value
+            mock_app = mock_app_cls.return_value
             mock_app._running = True
             mock_app.is_thread_alive = False  # thread died
 
-            mock_net = MockNet.return_value
+            mock_net = mock_net_cls.return_value
             mock_net._running = True
             mock_net.is_thread_alive = True
 
             from src.session.session_manager import SessionManager
+
             buf = MagicMock()
             buf.get_config.return_value = None
             sm = SessionManager(buf)
@@ -578,20 +593,23 @@ class TestWatchdog:
 
     def test_check_health_restarts_dead_network_collector(self):
         """check_health restarts dead network collector."""
-        with patch("src.session.session_manager.get_platform"), \
-             patch("src.session.session_manager.Categorizer"), \
-             patch("src.session.session_manager.AppCollector") as MockApp, \
-             patch("src.session.session_manager.NetworkCollector") as MockNet:
+        with (
+            patch("src.session.session_manager.get_platform"),
+            patch("src.session.session_manager.Categorizer"),
+            patch("src.session.session_manager.AppCollector") as mock_app_cls,
+            patch("src.session.session_manager.NetworkCollector") as mock_net_cls,
+        ):
 
-            mock_app = MockApp.return_value
+            mock_app = mock_app_cls.return_value
             mock_app._running = True
             mock_app.is_thread_alive = True
 
-            mock_net = MockNet.return_value
+            mock_net = mock_net_cls.return_value
             mock_net._running = True
             mock_net.is_thread_alive = False  # thread died
 
             from src.session.session_manager import SessionManager
+
             buf = MagicMock()
             buf.get_config.return_value = None
             sm = SessionManager(buf)
@@ -604,12 +622,15 @@ class TestWatchdog:
 
     def test_check_health_noop_when_stopped(self):
         """check_health does nothing when session is stopped."""
-        with patch("src.session.session_manager.get_platform"), \
-             patch("src.session.session_manager.Categorizer"), \
-             patch("src.session.session_manager.AppCollector") as MockApp, \
-             patch("src.session.session_manager.NetworkCollector") as MockNet:
+        with (
+            patch("src.session.session_manager.get_platform"),
+            patch("src.session.session_manager.Categorizer"),
+            patch("src.session.session_manager.AppCollector"),
+            patch("src.session.session_manager.NetworkCollector"),
+        ):
 
             from src.session.session_manager import SessionManager
+
             buf = MagicMock()
             buf.get_config.return_value = None
             sm = SessionManager(buf)
@@ -622,6 +643,7 @@ class TestWatchdog:
 # Memory check tests
 # ============================================================
 
+
 class TestMemoryCheck:
     """Tests for memory monitoring in AgentCore."""
 
@@ -633,7 +655,7 @@ class TestMemoryCheck:
         agent._check_memory()
 
     def test_check_memory_warns_on_high_usage(self):
-        from src.agent_core import AgentCore, MEMORY_WARNING_MB
+        from src.agent_core import MEMORY_WARNING_MB, AgentCore
 
         agent = AgentCore()
 
@@ -651,96 +673,82 @@ class TestMemoryCheck:
 
 
 # ============================================================
-# API key migration tests
+# Legacy credential cleanup tests
 # ============================================================
 
-class TestAPIKeyMigration:
-    """Tests for API key obfuscation migration in AgentCore."""
 
-    def test_migrate_stores_key_in_db(self, tmp_path):
+class TestLegacyCredentialCleanup:
+    """Credentials from older builds are removed from the telemetry DB."""
+
+    def test_cleanup_removes_obfuscated_api_key(self, tmp_path):
         from src.agent_core import AgentCore
         from src.storage.sqlite_buffer import SQLiteBuffer
 
         buf = SQLiteBuffer(db_path=tmp_path / "test.db")
+        buf.set_config("api_key_enc", "legacy-reversible-value")
         agent = AgentCore()
         agent._buffer = buf
 
-        with patch("src.config.config") as mock_config:
-            mock_config.API_KEY = "test_api_key_12345"
-            agent._migrate_api_key()
+        agent._remove_legacy_credentials()
 
-        stored = buf.get_config("api_key_enc")
-        assert stored is not None
-        assert stored != "test_api_key_12345"  # should be obfuscated
+        assert buf.get_config("api_key_enc") is None
         buf.close()
 
-    def test_migrate_loads_key_from_db(self, tmp_path):
-        from src.agent_core import AgentCore
-        from src.storage.sqlite_buffer import SQLiteBuffer
-        from src.utils.crypto import get_machine_salt, obfuscate
-
-        buf = SQLiteBuffer(db_path=tmp_path / "test.db")
-
-        # Pre-store an encrypted key
-        salt = get_machine_salt()
-        encrypted = obfuscate("stored_secret_key", salt)
-        buf.set_config("api_key_enc", encrypted)
-
-        agent = AgentCore()
-        agent._buffer = buf
-
-        with patch("src.agent_core.config") as mock_config:
-            mock_config.API_KEY = "old_env_key"
-            agent._migrate_api_key()
-            # config.API_KEY should now be updated to the stored key
-            assert mock_config.API_KEY == "stored_secret_key"
-
-        buf.close()
-
-    def test_migrate_skips_short_key(self, tmp_path):
+    def test_cleanup_removes_browser_access_token(self, tmp_path):
         from src.agent_core import AgentCore
         from src.storage.sqlite_buffer import SQLiteBuffer
 
         buf = SQLiteBuffer(db_path=tmp_path / "test.db")
+        buf.set_config("access_token", "legacy-access-token")
         agent = AgentCore()
         agent._buffer = buf
 
-        with patch("src.agent_core.config") as mock_config:
-            mock_config.API_KEY = ""  # empty
-            agent._migrate_api_key()
+        agent._remove_legacy_credentials()
 
-        stored = buf.get_config("api_key_enc")
-        assert stored is None  # nothing stored
+        assert buf.get_config("access_token") is None
         buf.close()
+
+    def test_cleanup_is_safe_without_buffer(self):
+        from src.agent_core import AgentCore
+
+        agent = AgentCore()
+        agent._remove_legacy_credentials()
 
 
 # ============================================================
 # Thread alive property tests
 # ============================================================
 
+
 class TestThreadAliveProperty:
     """Tests for is_thread_alive on collectors."""
 
     def test_app_collector_thread_alive_before_start(self):
-        with patch("src.collectors.app_collector.get_platform"), \
-             patch("src.collectors.app_collector.config") as mock_config:
+        with (
+            patch("src.collectors.app_collector.get_platform"),
+            patch("src.collectors.app_collector.config") as mock_config,
+        ):
             mock_config.load_categories.return_value = {"ignored_apps": []}
             mock_config.APP_POLL_INTERVAL = 1
             mock_config.IDLE_THRESHOLD = 60
 
             from src.collectors.app_collector import AppCollector
+
             collector = AppCollector()
             assert collector.is_thread_alive is False
 
     def test_network_collector_thread_alive_before_start(self):
-        with patch("src.collectors.network_collector.get_platform"), \
-             patch("src.collectors.network_collector.Categorizer"), \
-             patch("src.collectors.network_collector.config") as mock_config:
+        with (
+            patch("src.collectors.network_collector.get_platform"),
+            patch("src.collectors.network_collector.Categorizer"),
+            patch("src.collectors.network_collector.config") as mock_config,
+        ):
             mock_config.load_categories.return_value = {"ignored_domains": []}
             mock_config.NETWORK_POLL_INTERVAL = 5
             mock_config.MIN_DOMAIN_DURATION = 1
 
             from src.collectors.network_collector import NetworkCollector
+
             with patch.object(NetworkCollector, "_load_system_dns_cache"):
                 collector = NetworkCollector()
             assert collector.is_thread_alive is False
