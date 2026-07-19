@@ -88,12 +88,12 @@ through macOS Privacy & Security or use an administrator deployment policy.
 
 1. Update `project.version` in `pyproject.toml`.
 2. Commit and push the tested source.
-3. Create a matching tag, such as `v1.1.0`.
+3. Create a matching tag, such as `v1.1.1`.
 4. Push the tag.
 
 ```bash
-git tag v1.1.0
-git push origin v1.1.0
+git tag v1.1.1
+git push origin v1.1.1
 ```
 
 Do not delete and recreate a published release to replace files. Publish a new
