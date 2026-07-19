@@ -1,5 +1,10 @@
 # Code Signing Guide for Local Monitoring Agent
 
+> **Current CI procedure:** use
+> [GITHUB_RELEASE_SIGNING.md](GITHUB_RELEASE_SIGNING.md). This document also
+> contains manual and self-signed development examples; self-signed certificates
+> do not provide public publisher trust.
+
 ## Overview
 
 Code signing prevents Windows and macOS from showing security warnings or blocking your application. This guide covers both platforms.
@@ -48,7 +53,7 @@ $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtoo
 $password = Read-Host -AsSecureString -Prompt "Enter certificate password"
 
 & $signtool sign /f lma_cert.pfx /p $password `
-  /t http://timestamp.digicert.com /fd SHA256 `
+  /fd SHA256 /tr https://timestamp.digicert.com /td SHA256 `
   /d "Local Monitor Agent" /du "https://github.com/VortexDevX/LMA.git" `
   "dist\LocalMonitorAgent.exe"
 
@@ -75,7 +80,7 @@ $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtoo
 $password = Read-Host -AsSecureString -Prompt "Enter certificate password"
 
 & $signtool sign /f your_cert.pfx /p $password `
-  /t http://timestamp.digicert.com /fd SHA256 `
+  /fd SHA256 /tr https://timestamp.digicert.com /td SHA256 `
   /d "Local Monitor Agent" /du "https://github.com/VortexDevX/LMA.git" `
   "dist\LocalMonitorAgent.exe"
 

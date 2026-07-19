@@ -107,6 +107,7 @@ python -m src.main --help
 - Do not publish without completing privacy and security documentation.
 - Monitoring/collector behavior was not changed.
 - Local runtime files, certificates, venvs, and build outputs should stay ignored.
+- GitHub builds and trusted release requirements: [docs/GITHUB_RELEASE_SIGNING.md](docs/GITHUB_RELEASE_SIGNING.md)
 
 ---
 

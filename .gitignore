@@ -36,6 +36,7 @@ agent.lock
 .env
 .env.local
 config.local.json
+release-private.key
 
 # Build artifacts
 *.spec

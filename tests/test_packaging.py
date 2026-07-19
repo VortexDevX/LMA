@@ -87,6 +87,28 @@ class TestBuildScripts:
         ).read_text(encoding="utf-8")
         assert "secrets.ENV_FILE" not in workflow
 
+    def test_ci_release_signing_is_fail_closed(self):
+        workflow = (
+            Path(__file__).parent.parent / ".github" / "workflows" / "build.yml"
+        ).read_text(encoding="utf-8")
+        required_release_controls = (
+            "CODESIGN_PFX_BASE64 is required for tagged releases",
+            "GPG_PRIVATE_KEY is required for tagged releases",
+            "MACOS_CERTIFICATE_P12_BASE64",
+            "APPLE_APP_PASSWORD",
+            "Windows signature is not publicly trusted",
+            "xcrun notarytool submit",
+            "actions/attest@v4",
+        )
+        for control in required_release_controls:
+            assert control in workflow
+
+    def test_ci_does_not_replace_existing_release(self):
+        workflow = (
+            Path(__file__).parent.parent / ".github" / "workflows" / "build.yml"
+        ).read_text(encoding="utf-8")
+        assert "gh release delete" not in workflow
+
 
 class TestPyInstallerImports:
     """Verify PyInstaller can import all modules."""

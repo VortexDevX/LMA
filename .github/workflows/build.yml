@@ -1,4 +1,4 @@
-name: Build & Sign
+name: Test, Build & Sign
 
 on:
   push:
@@ -9,216 +9,354 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: lma-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+env:
+  PYTHON_VERSION: "3.12"
 
 jobs:
-  # ============================================================
-  # Windows Build + Self-Signed Code Signing
-  # ============================================================
-  build-windows:
+  quality:
+    name: Tests and lint
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-          cache: "pip"
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
 
-      - name: Install dependencies
+      - name: Install test dependencies
         run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
+          python -m pip install --upgrade pip
+          python -m pip install ".[dev]"
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Run Ruff
+        run: python -m ruff check .
+
+      - name: Verify tag matches project version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])"
+          $tagVersion = "${{ github.ref_name }}" -replace '^v', ''
+          if ($version -ne $tagVersion) {
+            throw "Tag version $tagVersion does not match pyproject.toml version $version"
+          }
+
+  build-windows:
+    name: Build Windows
+    needs: quality
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
 
       - name: Build executable
         run: pyinstaller local-monitor-agent.spec --noconfirm
 
-      - name: Sign executable
-        if: env.CODESIGN_PFX != ''
+      - name: Require a trusted Windows certificate for releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
         env:
           CODESIGN_PFX: ${{ secrets.CODESIGN_PFX_BASE64 }}
           CODESIGN_PASSWORD: ${{ secrets.CODESIGN_PASSWORD }}
-        shell: powershell
         run: |
-          # Decode PFX from base64 secret
-          $pfxBytes = [Convert]::FromBase64String($env:CODESIGN_PFX)
-          [IO.File]::WriteAllBytes("$PWD\lma_cert.pfx", $pfxBytes)
-
-          # Find SignTool
-          $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Filter "signtool.exe" |
-            Where-Object { $_.FullName -match "x64" } |
-            Sort-Object FullName -Descending |
-            Select-Object -First 1
-
-          if (-not $signtool) {
-            Write-Host "WARNING: SignTool not found, skipping signing"
-            exit 0
+          if ([string]::IsNullOrWhiteSpace($env:CODESIGN_PFX)) {
+            throw "CODESIGN_PFX_BASE64 is required for tagged releases"
+          }
+          if ([string]::IsNullOrWhiteSpace($env:CODESIGN_PASSWORD)) {
+            throw "CODESIGN_PASSWORD is required for tagged releases"
           }
 
-          Write-Host "Signing with: $($signtool.FullName)"
+      - name: Sign executable
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          CODESIGN_PFX: ${{ secrets.CODESIGN_PFX_BASE64 }}
+          CODESIGN_PASSWORD: ${{ secrets.CODESIGN_PASSWORD }}
+        run: |
+          $pfxPath = Join-Path $env:RUNNER_TEMP "lma-codesign.pfx"
+          try {
+            [IO.File]::WriteAllBytes(
+              $pfxPath,
+              [Convert]::FromBase64String($env:CODESIGN_PFX)
+            )
+            $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Filter signtool.exe |
+              Where-Object { $_.FullName -match 'x64' } |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1
+            if (-not $signtool) { throw "SignTool was not found" }
 
-          & $signtool.FullName sign /f lma_cert.pfx /p $env:CODESIGN_PASSWORD `
-            /t http://timestamp.digicert.com /fd SHA256 `
-            /d "Local Monitor Agent" `
-            "dist\LocalMonitorAgent.exe"
+            & $signtool.FullName sign /f $pfxPath /p $env:CODESIGN_PASSWORD `
+              /fd SHA256 /tr https://timestamp.digicert.com /td SHA256 `
+              /d "Local Monitor Agent" /du "https://github.com/VortexDevX/LMA" `
+              "dist\LocalMonitorAgent.exe"
+            if ($LASTEXITCODE -ne 0) { throw "SignTool signing failed" }
 
-          # Cleanup
-          Remove-Item "lma_cert.pfx" -Force
+            $signature = Get-AuthenticodeSignature "dist\LocalMonitorAgent.exe"
+            if (-not $signature.SignerCertificate) {
+              throw "The Windows executable does not contain a signature"
+            }
+          }
+          finally {
+            Remove-Item $pfxPath -Force -ErrorAction SilentlyContinue
+          }
 
-      - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
+      - name: Enforce public trust for Windows releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $signature = Get-AuthenticodeSignature "dist\LocalMonitorAgent.exe"
+          if ($signature.Status -ne "Valid") {
+            throw "Windows signature is not publicly trusted: $($signature.Status)"
+          }
+
+      - name: Generate Windows checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash "dist\LocalMonitorAgent.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  LocalMonitorAgent.exe" | Set-Content "dist\LocalMonitorAgent.exe.sha256" -Encoding ascii
+
+      - name: Attest Windows executable
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/LocalMonitorAgent.exe
+
+      - uses: actions/upload-artifact@v4
         with:
           name: LocalMonitorAgent-Windows
-          path: dist/LocalMonitorAgent.exe
+          if-no-files-found: error
+          path: |
+            dist/LocalMonitorAgent.exe
+            dist/LocalMonitorAgent.exe.sha256
 
-  # ============================================================
-  # Linux Build + GPG Signing
-  # ============================================================
   build-linux:
+    name: Build Linux
+    needs: quality
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-          cache: "pip"
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libgirepository1.0-dev gcc libcairo2-dev \
-            pkg-config python3-dev gir1.2-gtk-3.0 libappindicator3-dev \
-            python3-tk
+            pkg-config python3-dev gir1.2-gtk-3.0 libappindicator3-dev python3-tk
 
-      - name: Install dependencies
+      - name: Install build dependencies
         run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
 
       - name: Build executable
         run: pyinstaller local-monitor-agent.spec --noconfirm
 
-      - name: Rename and set permissions
+      - name: Rename executable
         run: |
           mv dist/LocalMonitorAgent dist/LocalMonitorAgent-linux
-          chmod +x dist/LocalMonitorAgent-linux
+          chmod 0755 dist/LocalMonitorAgent-linux
+
+      - name: Require a GPG key for releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          if [ -z "$GPG_PRIVATE_KEY" ]; then
+            echo "GPG_PRIVATE_KEY is required for tagged releases" >&2
+            exit 1
+          fi
 
       - name: GPG sign executable
-        if: env.GPG_PRIVATE_KEY != ''
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          # Import GPG key
-          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-
-          # Sign the executable
-          echo "$GPG_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback \
+          export GNUPGHOME="$RUNNER_TEMP/lma-gnupg"
+          install -m 0700 -d "$GNUPGHOME"
+          printf '%s' "$GPG_PRIVATE_KEY" > "$RUNNER_TEMP/lma-signing-key.asc"
+          gpg --batch --import "$RUNNER_TEMP/lma-signing-key.asc"
+          rm -f "$RUNNER_TEMP/lma-signing-key.asc"
+          printf '%s' "$GPG_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback \
             --passphrase-fd 0 --armor --detach-sign dist/LocalMonitorAgent-linux
+          gpg --verify dist/LocalMonitorAgent-linux.asc dist/LocalMonitorAgent-linux
+          rm -rf "$GNUPGHOME"
 
-          echo "Signed: dist/LocalMonitorAgent-linux.asc"
+      - name: Generate Linux checksum
+        run: cd dist && sha256sum LocalMonitorAgent-linux > LocalMonitorAgent-linux.sha256
 
-      - name: Upload Linux artifact
-        uses: actions/upload-artifact@v4
+      - name: Attest Linux executable
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/LocalMonitorAgent-linux
+
+      - uses: actions/upload-artifact@v4
         with:
           name: LocalMonitorAgent-Linux
+          if-no-files-found: error
           path: |
             dist/LocalMonitorAgent-linux
+            dist/LocalMonitorAgent-linux.sha256
             dist/LocalMonitorAgent-linux.asc
 
-  # ============================================================
-  # macOS Build + Ad-hoc Signing (free)
-  # ============================================================
   build-macos:
+    name: Build macOS
+    needs: quality
     runs-on: macos-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-          cache: "pip"
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
 
-      - name: Install dependencies
+      - name: Install build dependencies
         run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-          pip install pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-Quartz
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller \
+            pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-Quartz
 
       - name: Build app bundle
         run: pyinstaller local-monitor-agent.spec --noconfirm
 
-      - name: Ad-hoc code sign (free)
+      - name: Require Developer ID and notarization credentials for releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          # Ad-hoc sign - makes app runnable without Apple Developer account
-          if [ -d "dist/LocalMonitorAgent.app" ]; then
-            codesign --deep --force --sign - "dist/LocalMonitorAgent.app"
-            echo "Ad-hoc signed: dist/LocalMonitorAgent.app"
-            codesign --verify --verbose "dist/LocalMonitorAgent.app" || true
-          elif [ -f "dist/LocalMonitorAgent" ]; then
-            codesign --force --sign - "dist/LocalMonitorAgent"
-            echo "Ad-hoc signed: dist/LocalMonitorAgent"
-          fi
+          for name in MACOS_CERTIFICATE MACOS_CERTIFICATE_PASSWORD MACOS_SIGNING_IDENTITY \
+            APPLE_ID APPLE_APP_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!name}" ]; then
+              echo "$name is required for tagged releases" >&2
+              exit 1
+            fi
+          done
+
+      - name: Sign with Apple Developer ID
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        run: |
+          export CERTIFICATE_PATH="$RUNNER_TEMP/lma-certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/lma-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          python -c 'import base64,os,pathlib; pathlib.Path(os.environ["CERTIFICATE_PATH"]).write_bytes(base64.b64decode(os.environ["MACOS_CERTIFICATE"], validate=True))'
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          codesign --deep --force --options runtime --timestamp \
+            --sign "$MACOS_SIGNING_IDENTITY" dist/LocalMonitorAgent.app
+          codesign --verify --deep --strict --verbose=2 dist/LocalMonitorAgent.app
+          rm -f "$CERTIFICATE_PATH"
+          security delete-keychain "$KEYCHAIN_PATH"
+
+      - name: Ad-hoc sign non-release build
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          codesign --deep --force --sign - dist/LocalMonitorAgent.app
+          codesign --verify --deep --strict --verbose=2 dist/LocalMonitorAgent.app
 
       - name: Create DMG
         run: |
-          if [ -d "dist/LocalMonitorAgent.app" ]; then
-            hdiutil create -volname "LocalMonitorAgent" -srcfolder dist/LocalMonitorAgent.app \
-              -ov -format UDZO dist/LocalMonitorAgent-macos.dmg
-          fi
+          hdiutil create -volname "Local Monitor Agent" \
+            -srcfolder dist/LocalMonitorAgent.app -ov -format UDZO \
+            dist/LocalMonitorAgent-macos.dmg
 
-      - name: Rename binary
+      - name: Notarize and staple DMG
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          if [ -f "dist/LocalMonitorAgent" ]; then
-            mv dist/LocalMonitorAgent dist/LocalMonitorAgent-macos
-          fi
+          xcrun notarytool submit dist/LocalMonitorAgent-macos.dmg \
+            --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" --wait
+          xcrun stapler staple dist/LocalMonitorAgent-macos.dmg
+          xcrun stapler validate dist/LocalMonitorAgent-macos.dmg
 
-      - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
+      - name: Generate macOS checksum
+        run: cd dist && shasum -a 256 LocalMonitorAgent-macos.dmg > LocalMonitorAgent-macos.dmg.sha256
+
+      - name: Attest macOS DMG
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/LocalMonitorAgent-macos.dmg
+
+      - uses: actions/upload-artifact@v4
         with:
           name: LocalMonitorAgent-macOS
+          if-no-files-found: error
           path: |
             dist/LocalMonitorAgent.app
             dist/LocalMonitorAgent-macos.dmg
-            dist/LocalMonitorAgent-macos
+            dist/LocalMonitorAgent-macos.dmg.sha256
 
-  # ============================================================
-  # Create GitHub Release (on tag push)
-  # ============================================================
   release:
+    name: Publish release
     needs: [build-windows, build-linux, build-macos]
-    runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Set Release Tag
-        shell: bash
-        run: |
-          echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-
-      - name: Delete existing release (if any)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Try to delete existing release for this tag (ignore errors if not found)
-          gh release delete "$TAG_NAME" --yes --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
-
-      - name: Create Release
+      - name: Publish immutable versioned assets
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.TAG_NAME }}
+          tag_name: ${{ github.ref_name }}
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
             artifacts/LocalMonitorAgent-Windows/*
             artifacts/LocalMonitorAgent-Linux/*
