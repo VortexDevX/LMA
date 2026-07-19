@@ -21,9 +21,11 @@ remain offline and out of Git/GitHub Actions.
 
 - Push or manual run: tests, Ruff, Windows/Linux/macOS builds, SHA-256 checksums,
   GitHub artifact attestations, and ad-hoc signing for macOS.
-- `v*` tag: same checks plus mandatory trusted Windows Authenticode signing.
-  Linux remains checksum/attestation verified. macOS remains ad-hoc self-signed
-  by project choice. Successful builds publish versioned GitHub Release assets.
+- `v*` tag: same checks plus mandatory Windows Authenticode signing. The current
+  temporary policy accepts either a publicly trusted certificate or a valid
+  self-signed code-signing certificate. Linux remains checksum/attestation
+  verified. macOS remains ad-hoc self-signed by project choice. Successful
+  builds publish versioned GitHub Release assets.
 
 Never add `.env`, `API_KEY`, or an `ENV_FILE` secret to this workflow.
 
@@ -31,8 +33,8 @@ Never add `.env`, `API_KEY`, or an `ENV_FILE` secret to this workflow.
 
 ### Windows
 
-- `CODESIGN_PFX_BASE64`: base64 content of a public-CA-issued Authenticode
-  code-signing PFX/P12 certificate.
+- `CODESIGN_PFX_BASE64`: base64 content of an Authenticode code-signing PFX/P12
+  certificate. A self-signed code-signing certificate is temporarily accepted.
 - `CODESIGN_PASSWORD`: PFX/P12 password.
 
 Create the base64 value locally without committing the certificate:
@@ -43,11 +45,23 @@ Create the base64 value locally without committing the certificate:
 ) | Set-Clipboard
 ```
 
-The old self-signed `CN=Local Monitor Agent` certificate proves that signing
-works, but it is not publicly trusted. It is suitable only for devices where its
-public certificate is deployed to the trusted publisher/root stores by an
-administrator or organization policy. Replace it before making a tagged public
-release.
+The self-signed `CN=Local Monitor Agent` certificate proves artifact integrity,
+but it is not publicly trusted. Windows will still show an unknown-publisher
+warning unless its public certificate is deployed to the trusted publisher/root
+stores by an administrator or organization policy.
+
+The workflow currently sets `ALLOW_SELF_SIGNED_WINDOWS: "true"`. The verifier
+accepts this only when the file is timestamped, the embedded certificate is
+self-issued, currently valid, has the Code Signing EKU, and the Authenticode
+signature becomes `Valid` after temporarily trusting that exact certificate in
+the ephemeral CI user's root store. The certificate is removed immediately.
+This does not accept unsigned files, hash mismatches, expired certificates, or
+arbitrary untrusted certificate chains.
+
+Change the workflow value to `"false"` after obtaining a publicly trusted
+certificate. Replace the self-signed certificate before distributing to normal
+public users if you want Windows SmartScreen/publisher trust without managed
+certificate installation.
 
 For a manual trusted-PFX build, run `scripts\sign_windows.bat`. Its PowerShell
 implementation prompts without echoing the password, timestamps the file, and

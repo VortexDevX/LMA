@@ -87,19 +87,38 @@ class TestBuildScripts:
         ).read_text(encoding="utf-8")
         assert "secrets.ENV_FILE" not in workflow
 
-    def test_ci_release_signing_is_fail_closed(self):
+    def test_ci_release_signing_requires_a_real_signature(self):
         workflow = (
             Path(__file__).parent.parent / ".github" / "workflows" / "build.yml"
         ).read_text(encoding="utf-8")
         required_release_controls = (
             "CODESIGN_PFX_BASE64 is required for tagged releases",
-            "Windows signature is not publicly trusted",
+            "scripts\\verify_windows_signature.ps1",
+            'ALLOW_SELF_SIGNED_WINDOWS: "true"',
             "Ad-hoc self-sign app",
             "actions/attest@v4",
         )
         for control in required_release_controls:
             assert control in workflow
         assert "/tr http://timestamp.digicert.com /td SHA256" in workflow
+
+    def test_self_signed_ci_verification_is_narrow_and_temporary(self):
+        script = (
+            Path(__file__).parent.parent
+            / "scripts"
+            / "verify_windows_signature.ps1"
+        ).read_text(encoding="utf-8")
+        required_controls = (
+            "Get-AuthenticodeSignature",
+            "TimeStamperCertificate",
+            "$certificate.Subject -ne $certificate.Issuer",
+            '1.3.6.1.5.5.7.3.3',
+            "CurrentUser",
+            '$trustedSignature.Status -ne "Valid"',
+            "$rootStore.Remove($certificate)",
+        )
+        for control in required_controls:
+            assert control in script
 
     def test_windows_signing_script_is_fail_closed(self):
         script = (

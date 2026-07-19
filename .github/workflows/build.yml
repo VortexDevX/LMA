@@ -17,6 +17,9 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.12"
+  # Temporary release policy. Set to "false" after replacing the development
+  # certificate with a publicly trusted Authenticode certificate.
+  ALLOW_SELF_SIGNED_WINDOWS: "true"
 
 jobs:
   quality:
@@ -75,7 +78,7 @@ jobs:
       - name: Build executable
         run: pyinstaller local-monitor-agent.spec --noconfirm
 
-      - name: Require a trusted Windows certificate for releases
+      - name: Require a Windows signing certificate for releases
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         env:
@@ -123,14 +126,14 @@ jobs:
             Remove-Item $pfxPath -Force -ErrorAction SilentlyContinue
           }
 
-      - name: Enforce public trust for Windows releases
+      - name: Verify Windows Authenticode signature
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: |
-          $signature = Get-AuthenticodeSignature "dist\LocalMonitorAgent.exe"
-          if ($signature.Status -ne "Valid") {
-            throw "Windows signature is not publicly trusted: $($signature.Status)"
-          }
+          $allowSelfSigned = $env:ALLOW_SELF_SIGNED_WINDOWS -eq "true"
+          & .\scripts\verify_windows_signature.ps1 `
+            -ExePath "dist\LocalMonitorAgent.exe" `
+            -AllowSelfSigned:$allowSelfSigned
 
       - name: Generate Windows checksum
         shell: pwsh
