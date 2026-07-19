@@ -15,7 +15,7 @@ Current implementation includes:
 
 Validation in current workspace:
 
-- 435 tests passed, 1 skipped
+- 450 tests passed, 1 expected platform skip on Windows
 
 ## 2. Prerequisites
 

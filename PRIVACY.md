@@ -18,7 +18,7 @@ The network collector is domain-level. It does not intentionally collect full UR
 
 Pending telemetry and device identity are stored in the platform data directory in SQLite until synchronization. Successfully sent records are removed from the local pending tables after 24 hours; permanently failed records are removed after 7 days. Logs rotate, but the deployment owner must confirm host-level retention.
 
-Telemetry is sent to `API_BASE_URL`. Production deployments must use HTTPS and restrict file/database permissions to the agent service account. The service API key remains in the protected agent environment/configuration file; current builds remove legacy credential copies from SQLite.
+Telemetry is sent to `API_BASE_URL`. Production deployments must use HTTPS and restrict file/database permissions to the agent user. Normal installations use a unique revocable device credential stored outside SQLite with Windows DPAPI, macOS Keychain, or user-only Linux file permissions; they do not receive the central service API key. Current builds remove legacy credential copies from SQLite.
 
 Server-side retention is not defined by the agent. Configure and document it in the employee API/database operations policy before deployment.
 
@@ -29,8 +29,8 @@ The deploying organization is the data controller/owner for operational purposes
 Local removal:
 
 ```text
-monitor-agent --reset       clear local identity and require setup again
-monitor-agent --uninstall   remove auto-start and optionally delete the local data directory
+LocalMonitorAgent --reset       clear local identity and require setup again
+LocalMonitorAgent --uninstall   remove auto-start and optionally delete the local data directory
 ```
 
 These commands do not delete records already synchronized to the server. Server-side export/deletion must be performed through an authorized backend process and must respect legal or business retention requirements.

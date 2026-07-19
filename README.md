@@ -1,120 +1,47 @@
-<div align="center">
+# Local Monitor Agent
 
-# Local Monitoring Agent
+Cross-platform desktop telemetry agent for Employee Management. It collects metadata-level application, session, and domain activity, buffers offline in SQLite, and sends records to Employee API with a unique revocable device credential.
 
-### Cross-platform desktop telemetry agent for productivity analytics
+Current source version: `1.1.1`.
 
-<p>
-  <img src="https://img.shields.io/badge/Python-111827?style=for-the-badge" alt="Python" />
-  <img src="https://img.shields.io/badge/Desktop%20Agent-111827?style=for-the-badge" alt="Desktop Agent" />
-  <img src="https://img.shields.io/badge/SQLite-111827?style=for-the-badge" alt="SQLite" />
-  <img src="https://img.shields.io/badge/Tray%20UI-111827?style=for-the-badge" alt="Tray UI" />
-  <img src="https://img.shields.io/badge/Offline%20Buffer-111827?style=for-the-badge" alt="Offline Buffer" />
-  <img src="https://img.shields.io/badge/Privacy%20TODO-111827?style=for-the-badge" alt="Privacy TODO" />
-</p>
-<p>
-  <a href="https://github.com/VortexDevX/LMA"><img src="https://img.shields.io/badge/GitHub%20Repo-111827?style=for-the-badge" alt="GitHub Repo" /></a>
-</p>
+## Privacy boundary
 
-</div>
+The agent records app names, active/idle duration, switches, domain names, estimated domain traffic/duration, and session totals. It does not intentionally collect keystrokes, screenshots, clipboard, full URLs/paths/queries, page or form content, credentials, webcam, or microphone data. Read [PRIVACY.md](PRIVACY.md) before deployment.
 
----
+## Authentication
 
-## Overview
+Builds never embed `.env`, employee credentials, a shared API key, or the update private key. First launch authenticates the employee and calls `/api/v1/devices/enroll`; the returned per-device credential is stored with Windows DPAPI, macOS Keychain, or a user-only Linux file.
 
-Local Monitoring Agent collects metadata-level activity signals, buffers locally, and syncs with a backend when available. Because this is a sensitive category, the README pairs technical setup with explicit privacy and security follow-up files.
+## Development
 
-<table>
-<tr>
-<td width="25%"><strong>Status</strong></td>
-<td>Utility repo with privacy/security documentation placeholders added</td>
-</tr>
-<tr>
-<td><strong>Stack</strong></td>
-<td>Python, psutil, requests, pystray, Pillow, SQLite-style local buffering, pytest, Ruff, Black</td>
-</tr>
-<tr>
-<td><strong>Built for</strong></td>
-<td>Teams piloting metadata-level workplace telemetry with clear notice and controls</td>
-</tr>
-</table>
-
-## Highlights
-
-- Desktop agent structure with collectors, storage, sync, setup, and tray UI
-- Offline-first buffering and backend sync orientation
-- Windows/macOS/Linux packaging scripts and signing notes
-- `PRIVACY.md` and `SECURITY.md` TODO placeholders added
-- Monitoring behavior intentionally not altered
-
-## Feature Map
-
-<table>
-<tr>
-<td width="50%" valign="top">
-
-### Collectors
-
-Activity, app/window, network, and session-oriented modules.
-
-</td>
-<td width="50%" valign="top">
-
-### Local Runtime
-
-Local data, lock files, logs, and sync behavior handled by the app.
-
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top">
-
-### Tray UI
-
-System-tray interface and setup wizard patterns for desktop use.
-
-</td>
-<td width="50%" valign="top">
-
-### Compliance Work
-
-Privacy and security docs are placeholders until real policy is written.
-
-</td>
-</tr>
-</table>
-
-## Quick Start
-
-Build artifacts never embed `.env` or API keys. On first login, backend enrolls
-the machine and issues a unique revocable device credential. Windows protects it
-with DPAPI; macOS uses Keychain; Linux uses a user-only credential file.
-
-```bash
+```powershell
 python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
+.\venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+Copy-Item .env.template .env
 python -m src.main --help
+python -m src.main --setup
 ```
 
-## Project Structure
+## Verification
 
-- src/ - agent source modules
-- tests/ - pytest suite
-- scripts/ - build, install, signing, and health-check helpers
-- docs/ - user, deployment, pilot, and signing documentation
+```powershell
+python -m pytest -q
+python -m ruff check .
+python -m compileall -q src scripts
+```
 
-## Notes
+Current Windows baseline: 450 passed and one expected non-Windows permission-test skip.
 
-- Do not publish without completing privacy and security documentation.
-- Monitoring/collector behavior was not changed.
-- Local runtime files, certificates, venvs, and build outputs should stay ignored.
-- GitHub builds and trusted release requirements: [docs/GITHUB_RELEASE_SIGNING.md](docs/GITHUB_RELEASE_SIGNING.md)
+## Documentation
 
----
+- [User guide](docs/USER_GUIDE.md)
+- [Technical overview](docs/LOCAL_AGENT_OVERVIEW.md)
+- [Deployment guide](docs/DEPLOYMENT_GUIDE.md)
+- [Pilot checklist](docs/PILOT_CHECKLIST.md)
+- [GitHub build and signing](docs/GITHUB_RELEASE_SIGNING.md)
+- [Security policy](SECURITY.md)
+- [Intermediate LMA guide](../docs/LOCAL_MONITOR_AGENT.md)
+- [Repository-wide configuration and acceptance](../docs/README.md)
 
-<div align="center">
-
-<strong>Clean docs. Clear setup. No fake screenshots.</strong>
-
-</div>
+The current updater manifest supports only one asset URL/checksum. Keep cross-platform auto-update disabled until manifest selection includes operating system and architecture and a real update/rollback pilot passes.

@@ -18,7 +18,7 @@ Out of scope:
 Implementation status:
 
 - Phases 0 through 16 implemented
-- End-to-end test suite passing in current workspace: 435 passed, 1 skipped
+- End-to-end test suite passing in current Windows workspace: 450 passed, 1 expected platform skip
 
 Major delivered areas:
 
@@ -320,5 +320,6 @@ From `src/main.py`:
 - `docs/DEPLOYMENT_GUIDE.md`
 - `docs/USER_GUIDE.md`
 - `docs/PILOT_CHECKLIST.md`
-- `docs/PLAN/PLAN.md`
-- `docs/SUMMARY/SUMMARY_6.md`
+- `docs/GITHUB_RELEASE_SIGNING.md`
+- `PRIVACY.md`
+- `SECURITY.md`

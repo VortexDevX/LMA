@@ -2,7 +2,7 @@
 
 ## Supported releases
 
-Only the newest deployed agent release should receive security fixes. The current source version is `1.1.0`; update this statement as part of every release. Older builds should be upgraded or removed.
+Only the newest deployed agent release should receive security fixes. The current source version is `1.1.1`; update this statement as part of every release. Older builds should be upgraded or removed.
 
 ## Reporting a vulnerability
 
@@ -43,4 +43,4 @@ Platform code signing and the release-manifest signature solve different problem
 
 ## Security verification
 
-Run the unit suite, changed-file lint gate, dependency audit, signed-manifest tampering tests, offline buffer/retry tests, and platform package-signature verification before release. See the root `TESTING_GUIDE.md` for executable commands.
+Run the unit suite, lint gate, dependency audit, signed-manifest tampering tests, offline buffer/retry tests, and platform package-signature verification before release. See the repository [testing guide](../docs/TESTING.md) for executable commands.
