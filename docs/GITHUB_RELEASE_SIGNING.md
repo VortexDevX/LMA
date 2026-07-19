@@ -20,11 +20,10 @@ remain offline and out of Git/GitHub Actions.
 `.github/workflows/build.yml` has two modes:
 
 - Push or manual run: tests, Ruff, Windows/Linux/macOS builds, SHA-256 checksums,
-  and GitHub artifact attestations. Windows and Linux artifacts are unsigned;
-  the macOS app is ad-hoc signed for build validation only.
-- `v*` tag: same checks, then mandatory platform signing. The release fails if
-  trusted signing credentials are absent or invalid. Successful tagged builds
-  publish versioned GitHub Release assets.
+  GitHub artifact attestations, and ad-hoc signing for macOS.
+- `v*` tag: same checks plus mandatory trusted Windows Authenticode signing.
+  Linux remains checksum/attestation verified. macOS remains ad-hoc self-signed
+  by project choice. Successful builds publish versioned GitHub Release assets.
 
 Never add `.env`, `API_KEY`, or an `ENV_FILE` secret to this workflow.
 
@@ -50,44 +49,37 @@ public certificate is deployed to the trusted publisher/root stores by an
 administrator or organization policy. Replace it before making a tagged public
 release.
 
+For a manual trusted-PFX build, run `scripts\sign_windows.bat`. Its PowerShell
+implementation prompts without echoing the password, timestamps the file, and
+fails closed for self-signed or untrusted production certificates.
+
 Some certificate vendors provide non-exportable hardware or cloud keys instead
 of a PFX. In that case, replace the PFX step with that provider's official GitHub
 Action or signing client. Microsoft Artifact Signing is one such alternative.
 
 ### Linux
 
-- `GPG_PRIVATE_KEY`: ASCII-armored private signing key.
-- `GPG_PASSPHRASE`: its passphrase (may be empty only for an intentionally
-  unprotected CI-only key).
-
-Publish the matching public key through a trusted project channel. Linux does not
-have a single universal executable-publisher trust system equivalent to Windows
-Authenticode; users verify the detached `.asc` signature and checksum.
+No repository secret is required. Releases include SHA-256 checksums and GitHub
+artifact attestations. Linux does not have one universal publisher-trust system
+equivalent to Windows Authenticode.
 
 ### macOS
 
-- `MACOS_CERTIFICATE_P12_BASE64`: base64 Developer ID Application certificate.
-- `MACOS_CERTIFICATE_PASSWORD`: P12 password.
-- `MACOS_SIGNING_IDENTITY`: for example,
-  `Developer ID Application: Company Name (TEAMID)`.
-- `APPLE_ID`: Apple Developer account email.
-- `APPLE_APP_PASSWORD`: app-specific password.
-- `APPLE_TEAM_ID`: Apple Developer Team ID.
-
-Public distribution requires an Apple Developer ID certificate, hardened-runtime
-signing, timestamping, notarization, and stapling. The workflow performs all five
-for tagged releases.
+No repository secret is required. Workflow performs ad-hoc signing (`codesign
+--sign -`) as requested. This validates bundle integrity but does not create an
+Apple-trusted or notarized application. Users may need to approve first launch
+through macOS Privacy & Security or use an administrator deployment policy.
 
 ## Make a release
 
 1. Update `project.version` in `pyproject.toml`.
 2. Commit and push the tested source.
-3. Create a matching tag, such as `v1.0.3`.
+3. Create a matching tag, such as `v1.1.0`.
 4. Push the tag.
 
 ```bash
-git tag v1.0.3
-git push origin v1.0.3
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
 Do not delete and recreate a published release to replace files. Publish a new
@@ -105,14 +97,12 @@ Linux:
 
 ```bash
 sha256sum -c LocalMonitorAgent-linux.sha256
-gpg --verify LocalMonitorAgent-linux.asc LocalMonitorAgent-linux
 ```
 
 macOS:
 
 ```bash
-spctl -a -vv --type execute /Applications/LocalMonitorAgent.app
-xcrun stapler validate LocalMonitorAgent-macos.dmg
+codesign --verify --deep --strict --verbose=2 /Applications/LocalMonitorAgent.app
 ```
 
 GitHub artifact attestation (all platforms):

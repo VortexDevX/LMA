@@ -214,17 +214,38 @@ class SetupWizard:
                 )
                 return
 
-            # Step 2: Register device (best-effort)
-            self._sender.send_immediate(
-                "/api/v1/devices/",
+            # Step 2: Enroll device. Setup must not succeed without its
+            # revocable per-device credential.
+            enrollment = self._sender.send_immediate(
+                "/api/v1/devices/enroll",
                 {
-                    "employee_id": emp_id,
                     "mac_address": self._system_info.mac_address,
                     "ip_address": self._system_info.local_ip,
                     "device_name": self._system_info.hostname,
                     "device_type": self._detect_device_type(),
                 },
+                include_errors=True,
+                bearer_token=result["access_token"],
             )
+            if enrollment is None or not isinstance(enrollment.get("device_token"), str):
+                message = (
+                    enrollment.get("detail", "Device enrollment failed.")
+                    if isinstance(enrollment, dict)
+                    else "Could not reach server during device enrollment."
+                )
+                self._root.after(0, self._on_login_error, message)  # type: ignore
+                return
+
+            try:
+                self._sender.install_device_token(enrollment["device_token"])
+            except Exception:
+                logger.exception("Could not store enrolled device credential")
+                self._root.after(  # type: ignore
+                    0,
+                    self._on_login_error,
+                    "Device credential could not be stored securely.",
+                )
+                return
 
             # Step 3: Save identity
             self._buffer.set_config("employee_id", str(emp_id))

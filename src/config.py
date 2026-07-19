@@ -127,7 +127,7 @@ class AgentConfig:
     LOG_LEVEL: str = _env("LOG_LEVEL", "INFO")
 
     # --- Agent Metadata ---
-    AGENT_VERSION: str = "1.0.2"
+    AGENT_VERSION: str = "1.1.0"
     SCHEMA_VERSION: int = 1
     SOURCE: str = "local_agent"
 

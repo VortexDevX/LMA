@@ -105,8 +105,8 @@ class TestWizardLoginLogic:
                 "full_name": "Test User",
                 "employee_code": "EMP001",
             },
-            # Device registration response
-            {"id": 5},
+            # Device enrollment response
+            {"id": 5, "device_token": "lma_abcdefghijklmnopqrstuvwxyz1234567890"},
         ]
 
         wizard._do_login("EMP001", "password", "123456")
@@ -118,6 +118,9 @@ class TestWizardLoginLogic:
         assert not any(
             recorded.args and recorded.args[0] == "access_token"
             for recorded in wizard._buffer.set_config.call_args_list
+        )
+        wizard._sender.install_device_token.assert_called_once_with(
+            "lma_abcdefghijklmnopqrstuvwxyz1234567890"
         )
 
         # Should schedule success callback on main thread
@@ -164,23 +167,21 @@ class TestWizardLoginLogic:
         error_msg = call_args[0][2]
         assert "Invalid password" in error_msg
 
-    def test_do_login_device_registration_failure_still_succeeds(self):
-        """Device reg failure should not prevent setup completion."""
+    def test_do_login_device_enrollment_failure_stops_setup(self):
+        """Identity must not be saved when no device credential was issued."""
         wizard = self._make_wizard()
 
         wizard._sender.send_immediate.side_effect = [
             {"access_token": "tok", "employee_id": 1, "full_name": "User"},  # Login OK
-            None,  # Device registration fails
+            None,  # Device enrollment fails
         ]
 
         wizard._do_login("EMP001", "pass", "123456")
 
-        # Should still save identity and call success
-        wizard._buffer.set_config.assert_any_call("employee_id", "1")
-        # Last after() call should be success, not error
+        wizard._buffer.set_config.assert_not_called()
         last_call = wizard._root.after.call_args_list[-1]  # type: ignore
         callback = last_call[0][1]
-        assert callback == wizard._on_login_success
+        assert callback == wizard._on_login_error
 
 
 # ============================================================

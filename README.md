@@ -86,7 +86,9 @@ Privacy and security docs are placeholders until real policy is written.
 
 ## Quick Start
 
-Build artifacts never embed `.env` or API keys. Installer writes runtime configuration to the platform data directory (on Windows, `%APPDATA%\\LocalMonitorAgent\\.env`). Keep `API_KEY` out of source control and release artifacts.
+Build artifacts never embed `.env` or API keys. On first login, backend enrolls
+the machine and issues a unique revocable device credential. Windows protects it
+with DPAPI; macOS uses Keychain; Linux uses a user-only credential file.
 
 ```bash
 python -m venv venv

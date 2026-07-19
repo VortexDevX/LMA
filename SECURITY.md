@@ -2,7 +2,7 @@
 
 ## Supported releases
 
-Only the newest deployed agent release should receive security fixes. The current source version is `1.0.2`; update this statement as part of every release. Older builds should be upgraded or removed.
+Only the newest deployed agent release should receive security fixes. The current source version is `1.1.0`; update this statement as part of every release. Older builds should be upgraded or removed.
 
 ## Reporting a vulnerability
 
@@ -12,7 +12,9 @@ Until that contact is configured, treat production release as blocked for extern
 
 ## Credential and local-data handling
 
-- The agent service key is read from `API_KEY` in the protected environment/config file. Restrict that file to the agent service account and rotate the key if exposed.
+- Normal installations receive a unique revocable device token after employee
+  login. The token is DPAPI-protected on Windows, stored in macOS Keychain, or
+  held in a user-only file on Linux. It is never bundled or stored in SQLite.
 - The employee password and TOTP code are used only for setup/login and must never be logged or persisted.
 - Current builds remove legacy `api_key_enc` and `access_token` values from SQLite. The old XOR helper was obfuscation, not encryption, and must not be described as secure storage.
 - SQLite contains monitoring data. Apply operating-system ACLs, use full-disk encryption where appropriate, and do not include the database in support bundles.
@@ -31,8 +33,10 @@ Platform code signing and the release-manifest signature solve different problem
 
 ## Backend expectations
 
-- `LOCAL_AGENT_API_KEY` on employee-api must match the agent `API_KEY` and must be unique to this service role.
-- Telemetry endpoints must enforce the `local_agent` role and employee/device ownership rules.
+- `LOCAL_AGENT_API_KEY` is a legacy managed-deployment credential and must not be
+  placed in public installers. Normal clients use hashed `device_credentials`.
+- Telemetry endpoints enforce the `local_agent` role and bind device credentials
+  to employee/device payload ownership.
 - Authentication endpoints need shared rate limiting in multi-worker/high-availability deployments.
 - Administrative mutations and sensitive reads should create centralized audit records.
 - Secrets, logs, backups, CORS origins, reverse proxy headers, TLS, and PostgreSQL permissions must be reviewed on the target deployment.

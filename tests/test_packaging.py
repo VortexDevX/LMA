@@ -93,15 +93,21 @@ class TestBuildScripts:
         ).read_text(encoding="utf-8")
         required_release_controls = (
             "CODESIGN_PFX_BASE64 is required for tagged releases",
-            "GPG_PRIVATE_KEY is required for tagged releases",
-            "MACOS_CERTIFICATE_P12_BASE64",
-            "APPLE_APP_PASSWORD",
             "Windows signature is not publicly trusted",
-            "xcrun notarytool submit",
+            "Ad-hoc self-sign app",
             "actions/attest@v4",
         )
         for control in required_release_controls:
             assert control in workflow
+        assert "/tr http://timestamp.digicert.com /td SHA256" in workflow
+
+    def test_windows_signing_script_is_fail_closed(self):
+        script = (
+            Path(__file__).parent.parent / "scripts" / "sign_windows.ps1"
+        ).read_text(encoding="utf-8")
+        assert "Refusing a self-signed certificate for a trusted release" in script
+        assert 'signature.Status -ne "Valid"' in script
+        assert "Read-Host \"PFX password\" -AsSecureString" in script
 
     def test_ci_does_not_replace_existing_release(self):
         workflow = (

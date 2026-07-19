@@ -11,10 +11,12 @@ Usage:
 """
 
 import argparse
+import getpass
 import json
 import os
 import socket
 import sqlite3
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -200,13 +202,39 @@ def check_env_config(data_dir: Path) -> dict:
                     if line and not line.startswith("#") and "=" in line:
                         key = line.split("=", 1)[0].strip()
                         result["keys"].append(key)
-            result["has_api_key"] = "API_KEY" in result["keys"]
+            result["has_api_url"] = "API_BASE_URL" in result["keys"]
         except Exception as e:
             result["error"] = str(e)
     else:
-        result["has_api_key"] = False
+        result["has_api_url"] = False
 
     return result
+
+
+def check_device_credential(data_dir: Path) -> dict:
+    """Check credential presence without reading or printing its value."""
+    if sys.platform == "darwin":
+        result = subprocess.run(
+            [
+                "/usr/bin/security",
+                "find-generic-password",
+                "-a",
+                getpass.getuser(),
+                "-s",
+                "com.vortexdevx.local-monitor-agent.device",
+            ],
+            check=False,
+            capture_output=True,
+            timeout=10,
+        )
+        return {"configured": result.returncode == 0, "storage": "macOS Keychain"}
+
+    path = data_dir / "device-credential.dat"
+    return {
+        "configured": path.is_file() and path.stat().st_size > 0,
+        "storage": "Windows DPAPI" if sys.platform == "win32" else "user-only file",
+        "path": str(path),
+    }
 
 
 def check_logs(data_dir: Path) -> dict:
@@ -255,6 +283,7 @@ def run_health_check(as_json: bool = False):
         "autostart": check_autostart(),
         "network": check_network(),
         "env_config": check_env_config(data_dir),
+        "device_credential": check_device_credential(data_dir),
         "logs": check_logs(data_dir),
     }
 
@@ -288,12 +317,18 @@ def run_health_check(as_json: bool = False):
 
     # Env config
     env = checks["env_config"]
-    if env["exists"] and env.get("has_api_key"):
+    if env["exists"] and env.get("has_api_url"):
         _ok(f".env configured ({len(env['keys'])} keys)")
     elif env["exists"]:
-        _warn(".env exists but missing API_KEY")
+        _warn(".env exists but missing API_BASE_URL")
     else:
         _fail(f".env not found at {env['path']}")
+
+    credential = checks["device_credential"]
+    if credential["configured"]:
+        _ok(f"Device credential configured ({credential['storage']})")
+    else:
+        _warn("Device credential missing; run setup")
 
     # Network
     net = checks["network"]
@@ -350,8 +385,8 @@ def run_health_check(as_json: bool = False):
 
     # Overall verdict
     issues = []
-    if not env.get("has_api_key"):
-        issues.append("API key not configured")
+    if not credential["configured"]:
+        issues.append("Device not enrolled")
     if not net["reachable"]:
         issues.append("Cannot reach API server")
     if not db["exists"]:

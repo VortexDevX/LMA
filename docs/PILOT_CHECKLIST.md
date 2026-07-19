@@ -14,7 +14,6 @@ Use this checklist per pilot machine.
 ## 2. Preflight
 
 - [ ] Backend API reachable from machine
-- [ ] Valid API key available
 - [ ] Build artifact available (`dist/LocalMonitorAgent.exe`)
 - [ ] Employee has password + TOTP ready
 
@@ -23,7 +22,7 @@ Use this checklist per pilot machine.
 - [ ] Installed via `scripts/install_windows.ps1` or `scripts/install_windows.bat`
 - [ ] Exe present at `%LOCALAPPDATA%\\Programs\\LocalMonitorAgent\\LocalMonitorAgent.exe`
 - [ ] Config present at `%APPDATA%\\LocalMonitorAgent\\.env`
-- [ ] `API_KEY` present in `.env`
+- [ ] `.env` contains API URL and update public key only
 - [ ] Auto-start registered
 - [ ] Start Menu shortcut created (Windows deployment path)
 
@@ -31,7 +30,8 @@ Use this checklist per pilot machine.
 
 - [ ] First-launch setup completed successfully
 - [ ] Login endpoint succeeded (`/api/v1/auth/login`)
-- [ ] Device registration attempted (`/api/v1/devices/`)
+- [ ] Device enrollment succeeded (`/api/v1/devices/enroll`)
+- [ ] `--status` reports device token configured
 - [ ] Local identity written (`employee_id`, `employee_name`, `device_mac`)
 
 ## 5. Runtime Verification
@@ -81,9 +81,9 @@ Use this checklist per pilot machine.
 
 ### 7.3 Auth failure handling
 
-- [ ] Simulate invalid API key (test machine only)
+- [ ] Revoke or block test device in backend
 - [ ] Agent enters auth cooldown behavior (no aggressive request hammering)
-- [ ] Restore valid key and verify recovery
+- [ ] Run `--setup` to re-enroll and verify recovery
 
 ### 7.4 Process recovery
 

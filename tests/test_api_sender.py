@@ -125,6 +125,30 @@ class TestSendImmediate:
         assert result == {"detail": "Invalid credentials", "_http_status": 401}
 
     @responses.activate
+    def test_send_immediate_supports_one_time_bearer_enrollment(self, sender, base_url):
+        sender._session.headers["X-Device-Token"] = "lma_existing-device-token"
+        sender._session.headers["X-API-Key"] = "legacy-key"
+        responses.add(
+            responses.POST,
+            f"{base_url}/api/v1/devices/enroll",
+            json={"id": 4, "device_token": "lma_token"},
+            status=200,
+        )
+
+        result = sender.send_immediate(
+            "/api/v1/devices/enroll",
+            {"mac_address": "aa:bb:cc:dd:ee:ff"},
+            bearer_token="temporary-login-token",
+        )
+
+        assert result == {"id": 4, "device_token": "lma_token"}
+        assert responses.calls[0].request.headers["Authorization"] == (
+            "Bearer temporary-login-token"
+        )
+        assert "X-Device-Token" not in responses.calls[0].request.headers
+        assert "X-API-Key" not in responses.calls[0].request.headers
+
+    @responses.activate
     def test_send_immediate_server_error(self, sender, base_url):
         responses.add(
             responses.POST,

@@ -53,8 +53,16 @@ def run_first_launch(buffer: SQLiteBuffer, sender: APISender) -> bool:
         print("  Login response did not include an employee identity.")
         return False
 
-    # Step 3: Register device
-    _register_device(sender, employee_id, system_info)
+    # Step 3: Enroll device and securely store its unique credential.
+    access_token = employee_data.get("access_token")
+    if not isinstance(access_token, str) or not _register_device(
+        sender,
+        employee_id=employee_id,
+        system_info=system_info,
+        access_token=access_token,
+    ):
+        print("  Setup stopped because device enrollment did not complete.")
+        return False
 
     # Step 4: Save identity
     buffer.set_config("employee_id", str(employee_id))
@@ -150,30 +158,48 @@ def _verify_login(sender: APISender, employee_code: str) -> dict | None:
     return None
 
 
-def _register_device(sender: APISender, employee_id: int, system_info) -> bool:
-    """Register this device with the backend."""
-    print("  Registering device...")
+def _register_device(
+    sender: APISender,
+    employee_id: int,
+    system_info,
+    access_token: str,
+) -> bool:
+    """Enroll this device and persist its unique API credential."""
+    print("  Enrolling device...")
 
     result = sender.send_immediate(
-        "/api/v1/devices/",
+        "/api/v1/devices/enroll",
         {
-            "employee_id": employee_id,
             "mac_address": system_info.mac_address,
             "ip_address": system_info.local_ip,
             "device_name": system_info.hostname,
             "device_type": _detect_device_type(),
         },
+        include_errors=True,
+        bearer_token=access_token,
     )
 
-    if result is not None:
-        device_id = result.get("id", "unknown")
-        print(f"  Device registered (id={device_id})")
-        logger.info(f"Device registered: {result}")
-        return True
+    if result is None:
+        print("  Device enrollment failed: server unavailable.")
+        return False
 
-    print("  Warning: Device registration failed. Will retry later.")
-    logger.warning("Device registration failed during setup")
-    return False
+    device_token = result.get("device_token")
+    if not isinstance(device_token, str):
+        detail = result.get("detail", "server did not return a device credential")
+        print(f"  Device enrollment failed: {detail}")
+        return False
+
+    try:
+        sender.install_device_token(device_token)
+    except Exception as exc:
+        logger.error("Could not store device credential: %s", exc)
+        print("  Device enrollment failed: credential could not be stored securely.")
+        return False
+
+    device_id = result.get("id", "unknown")
+    print(f"  Device enrolled (id={device_id})")
+    logger.info("Device enrollment complete: device_id=%s employee_id=%s", device_id, employee_id)
+    return True
 
 
 def _detect_device_type() -> str:

@@ -221,12 +221,15 @@ class AgentCore:
         Check if first launch setup is needed. Run it if so.
         Uses CLI when terminal is available, GUI wizard otherwise.
         """
-        if self._session_manager.is_configured:  # type: ignore
+        if self._session_manager.is_configured and self._sender.has_device_token:  # type: ignore
             emp_id = self._session_manager.employee_id  # type: ignore
             mac = self._session_manager.device_mac  # type: ignore
             name = self._buffer.get_config("employee_name", "Unknown")  # type: ignore
             logger.info(f"Identity loaded: employee={emp_id} ({name}), " f"device={mac}")
             return True
+
+        if self._session_manager.is_configured:  # type: ignore
+            logger.warning("Identity exists without device credential; enrollment required")
 
         logger.info("First launch detected. Running setup...")
 

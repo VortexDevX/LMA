@@ -24,16 +24,15 @@ Required:
 - OS: Windows 10/11 (primary), macOS, or Linux
 - Network access to backend API host
 - Agent executable build artifact (`dist/LocalMonitorAgent.exe` on Windows)
-- Backend API key for agent auth (`API_KEY`)
 - Employee credentials for first-time setup:
-  - employee ID (numeric)
+  - employee code
   - password
   - TOTP code
 
 Backend endpoints expected:
 
 - `POST /api/v1/auth/login`
-- `POST /api/v1/devices/`
+- `POST /api/v1/devices/enroll`
 - `POST /api/v1/telemetry/sessions`
 - `POST /api/v1/telemetry/app-usage`
 - `POST /api/v1/telemetry/domain-visits`
@@ -45,13 +44,13 @@ Backend endpoints expected:
 
 ```powershell
 cd <project-root>
-.\scripts\install_windows.ps1 -ApiKey "<YOUR_API_KEY>"
+.\scripts\install_windows.ps1
 ```
 
 Optional silent mode:
 
 ```powershell
-.\scripts\install_windows.ps1 -ApiKey "<YOUR_API_KEY>" -Silent
+.\scripts\install_windows.ps1 -Silent
 ```
 
 What it does:
@@ -65,7 +64,7 @@ What it does:
 
 ```bat
 cd <project-root>
-scripts\install_windows.bat <YOUR_API_KEY>
+scripts\install_windows.bat
 ```
 
 ## 4. Manual Install (Windows)
@@ -79,8 +78,8 @@ scripts\install_windows.bat <YOUR_API_KEY>
 - `%APPDATA%\\LocalMonitorAgent\\.env`
 
 ```dotenv
-API_KEY=<YOUR_API_KEY>
 API_BASE_URL=https://emp-manan.mvlab.cloud
+UPDATE_PUBLIC_KEY=MtABa8HiQ+WowR87lbpTs32yZa5OzvP5BgsZlaEBnyw=
 LOG_LEVEL=INFO
 ```
 
@@ -112,8 +111,10 @@ Forced setup mode:
 Setup API sequence:
 
 1. `POST /api/v1/auth/login`
-2. `POST /api/v1/devices/`
-3. Local config write (`employee_id`, `device_mac`, `employee_name`, etc.)
+2. `POST /api/v1/devices/enroll` with temporary login bearer token
+3. Unique device credential stored with Windows DPAPI, macOS Keychain, or a
+   user-only Linux credential file
+4. Local identity config write (`employee_id`, `device_mac`, `employee_name`, etc.)
 
 ## 6. Post-Install Verification
 
@@ -129,7 +130,7 @@ Check:
 - Employee/device identity
 - Pending counts
 - Last sync timestamp
-- API key configured
+- Device token configured
 
 ### 6.2 Health check script
 
@@ -183,7 +184,8 @@ Rollback behavior:
 
 Implemented:
 
-- API key migration to obfuscated machine-tied value in SQLite config
+- Unique revocable device token; no shared API key in executable or installer
+- Windows DPAPI and macOS Keychain credential protection
 - BOM-safe `.env` parsing
 - Stale `sending` record reset at startup
 - Sender auth cooldown on 401/403 to avoid request hammering
@@ -196,11 +198,8 @@ Expected behavior: when exe is launched from an existing terminal, that terminal
 
 ### 11.2 Repeated auth errors (401/403)
 
-Check:
-
-- `%APPDATA%\\LocalMonitorAgent\\.env` has correct `API_KEY`
-- Correct backend base URL
-- API key validity on backend
+Run `LocalMonitorAgent.exe --setup` to re-enroll the device. Also check backend
+reachability and whether an administrator blocked the device.
 
 Agent now applies auth cooldown after 401/403.
 
@@ -218,7 +217,7 @@ Check:
 
 - Employee credentials and current TOTP
 - Backend reachability
-- Device registration endpoint response
+- Device enrollment endpoint response
 
 ### 11.5 Domain visits missing for browser traffic
 

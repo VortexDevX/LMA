@@ -137,14 +137,30 @@ class TestDeviceRegistration:
         with patch.object(
             sender,
             "send_immediate",
-            return_value={"id": 5, "mac_address": "aa:bb:cc:dd:ee:ff"},
+            return_value={
+                "id": 5,
+                "mac_address": "aa:bb:cc:dd:ee:ff",
+                "device_token": "lma_abcdefghijklmnopqrstuvwxyz1234567890",
+            },
         ):
-            result = _register_device(sender, employee_id=1, system_info=system_info)
+            with patch.object(sender, "install_device_token") as install:
+                result = _register_device(
+                    sender,
+                    employee_id=1,
+                    system_info=system_info,
+                    access_token="login-token",
+                )
             assert result is True
+            install.assert_called_once()
 
     def test_register_device_failure(self, sender, system_info):
         with patch.object(sender, "send_immediate", return_value=None):
-            result = _register_device(sender, employee_id=1, system_info=system_info)
+            result = _register_device(
+                sender,
+                employee_id=1,
+                system_info=system_info,
+                access_token="login-token",
+            )
             assert result is False
 
 

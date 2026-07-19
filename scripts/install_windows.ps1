@@ -3,12 +3,10 @@
 # ============================================================
 # Usage:
 #   .\install_windows.ps1
-#   .\install_windows.ps1 -ApiKey "your_key"
-#   .\install_windows.ps1 -ApiKey "your_key" -Silent
+#   .\install_windows.ps1 -Silent
 # ============================================================
 
 param(
-    [string]$ApiKey = "",
     [switch]$Silent = $false
 )
 
@@ -44,15 +42,6 @@ if ($proc) {
     Start-Sleep -Seconds 2
 }
 
-# --- API Key ---
-if (-not $ApiKey) {
-    $ApiKey = Read-Host "Enter your API Key"
-    if (-not $ApiKey) {
-        Write-Host "ERROR: API Key is required." -ForegroundColor Red
-        exit 1
-    }
-}
-
 Write-Host ""
 Write-Host "Installing..."
 Write-Host ""
@@ -70,8 +59,8 @@ Write-Host "        OK: $InstallDir\LocalMonitorAgent.exe"
 # --- Create .env ---
 Write-Host "  [2/5] Creating configuration..."
 @"
-API_KEY=$ApiKey
 API_BASE_URL=https://emp-manan.mvlab.cloud
+UPDATE_PUBLIC_KEY=MtABa8HiQ+WowR87lbpTs32yZa5OzvP5BgsZlaEBnyw=
 LOG_LEVEL=INFO
 "@ | Out-File -FilePath "$DataDir\.env" -Encoding utf8NoBOM -Force
 Write-Host "        OK: $DataDir\.env"

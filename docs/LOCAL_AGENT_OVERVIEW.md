@@ -25,7 +25,7 @@ Major delivered areas:
 - Platform abstraction (Windows/macOS/Linux)
 - Collectors, categorization, session aggregation, SQLite buffering, API sender
 - Tray UI, CLI, setup wizard GUI fallback
-- Hardening (API key obfuscation, stale record reset, watchdog, memory checks, auth cooldown)
+- Hardening (per-device credentials, stale record reset, watchdog, memory checks, auth cooldown)
 - Auto-update and rollback support
 
 ## 3. High-Level Architecture
@@ -167,15 +167,15 @@ Behavior:
 CLI setup:
 
 - File: `src/setup/first_launch.py`
-- Prompts: employee_id, password, TOTP
+- Prompts: employee code, password, TOTP
 - Auth endpoint: `POST /api/v1/auth/login`
-- Device registration endpoint: `POST /api/v1/devices/`
+- Device enrollment endpoint: `POST /api/v1/devices/enroll`
 
 GUI setup:
 
 - File: `src/ui/setup_wizard.py`
 - Used when no interactive terminal is available and tkinter exists
-- Writes identity/device config locally after successful login
+- Stores unique device credential securely, then writes non-secret identity config
 
 ### 4.9 Tray UI
 
@@ -273,12 +273,13 @@ Domain telemetry is domain-only. Full URLs/paths/queries are not stored.
 
 Implemented hardening controls include:
 
-- API key migration from plaintext env to machine-tied obfuscated value in SQLite config (`src/utils/crypto.py`)
+- Per-device backend credentials stored outside SQLite (`src/utils/credential_store.py`)
+- Windows DPAPI, macOS Keychain, and user-only Linux storage
 - BOM-safe env loading for Windows-created `.env`
 - Linux/macOS restrictive DB file permissions
 - Auth cooldown on repeated auth failures
 - Watchdog and stale send-state recovery
-- HTTPS transport and API key auth headers
+- HTTPS transport and per-device auth headers
 
 ## 7. Runtime Paths
 

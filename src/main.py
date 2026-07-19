@@ -139,7 +139,13 @@ def _cmd_status():
     print(f"Data dir:     {config.DATA_DIR}")
     print(f"Log dir:      {config.LOG_DIR}")
     print(f"API URL:      {config.API_BASE_URL}")
-    print(f"API key:      {'Configured' if config.API_KEY else 'NOT SET'}")
+    from src.utils.credential_store import CredentialStore
+
+    print(
+        "Device token: "
+        f"{'Configured' if CredentialStore().load() else 'NOT ENROLLED'}"
+    )
+    print(f"Legacy key:   {'Configured' if config.API_KEY else 'Not used'}")
 
     return 0
 
@@ -148,6 +154,7 @@ def _cmd_reset():
     """Clear identity config to force re-setup."""
     from src.config import config
     from src.storage.sqlite_buffer import SQLiteBuffer
+    from src.utils.credential_store import CredentialStore
 
     # Check not running
     if config.LOCK_FILE.exists():
@@ -161,7 +168,7 @@ def _cmd_reset():
         except Exception:
             pass
 
-    if not config.DB_PATH.exists():
+    if not config.DB_PATH.exists() and not CredentialStore().load():
         print("Nothing to reset. Database doesn't exist.")
         return 0
 
@@ -171,6 +178,10 @@ def _cmd_reset():
         return 0
 
     try:
+        CredentialStore().delete()
+        if not config.DB_PATH.exists():
+            print("Device credential cleared. Run the agent again to re-setup.")
+            return 0
         buffer = SQLiteBuffer(db_path=config.DB_PATH)
         buffer.delete_config("employee_id")
         buffer.delete_config("device_mac")
@@ -192,6 +203,7 @@ def _cmd_uninstall():
 
     from src.config import config
     from src.utils.autostart import is_autostart_enabled, unregister_autostart
+    from src.utils.credential_store import CredentialStore
 
     # Check not running
     if config.LOCK_FILE.exists():
@@ -220,6 +232,9 @@ def _cmd_uninstall():
     if config.LOCK_FILE.exists():
         config.LOCK_FILE.unlink(missing_ok=True)
         print("  [OK] Lock file removed")
+
+    CredentialStore().delete()
+    print("  [OK] Device credential removed")
 
     # Ask about data
     confirm = input(f"\nDelete all agent data in {config.DATA_DIR}? [y/N]: ")
@@ -251,6 +266,7 @@ def _cmd_setup():
     from src.setup.first_launch import run_first_launch
     from src.storage.sqlite_buffer import SQLiteBuffer
     from src.utils.autostart import register_autostart
+    from src.utils.credential_store import CredentialStore
 
     buffer = SQLiteBuffer(db_path=config.DB_PATH)
     sender = APISender(buffer)
@@ -262,6 +278,7 @@ def _cmd_setup():
     buffer.delete_config("employee_code")
     buffer.delete_config("access_token")
     buffer.delete_config("hostname")
+    CredentialStore().delete()
 
     success = run_first_launch(buffer, sender)
 

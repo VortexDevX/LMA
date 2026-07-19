@@ -7,7 +7,10 @@
 
 ## Overview
 
-Code signing prevents Windows and macOS from showing security warnings or blocking your application. This guide covers both platforms.
+Code signing proves who produced a build and detects later modification. Only a
+certificate that chains to a trust anchor already accepted by the target OS can
+remove unknown-publisher warnings. Self-signed and macOS ad-hoc signatures are
+integrity controls, not public publisher trust.
 
 ---
 
@@ -53,7 +56,7 @@ $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtoo
 $password = Read-Host -AsSecureString -Prompt "Enter certificate password"
 
 & $signtool sign /f lma_cert.pfx /p $password `
-  /fd SHA256 /tr https://timestamp.digicert.com /td SHA256 `
+  /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
   /d "Local Monitor Agent" /du "https://github.com/VortexDevX/LMA.git" `
   "dist\LocalMonitorAgent.exe"
 
@@ -80,7 +83,7 @@ $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtoo
 $password = Read-Host -AsSecureString -Prompt "Enter certificate password"
 
 & $signtool sign /f your_cert.pfx /p $password `
-  /fd SHA256 /tr https://timestamp.digicert.com /td SHA256 `
+  /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
   /d "Local Monitor Agent" /du "https://github.com/VortexDevX/LMA.git" `
   "dist\LocalMonitorAgent.exe"
 

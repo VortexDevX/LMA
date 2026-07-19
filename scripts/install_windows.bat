@@ -3,8 +3,7 @@ REM ============================================================
 REM Local Monitor Agent - Windows Installer
 REM ============================================================
 REM Usage:
-REM   install_windows.bat                     (prompts for API key)
-REM   install_windows.bat YOUR_API_KEY        (silent API key)
+REM   install_windows.bat
 REM ============================================================
 
 setlocal enabledelayedexpansion
@@ -41,19 +40,6 @@ if not errorlevel 1 (
     timeout /t 2 /nobreak >NUL
 )
 
-REM --- API Key ---
-set "API_KEY=%~1"
-if "%API_KEY%"=="" (
-    echo.
-    set /p "API_KEY=Enter your API Key: "
-)
-
-if "%API_KEY%"=="" (
-    echo ERROR: API Key is required.
-    pause
-    exit /b 1
-)
-
 REM --- Create directories ---
 echo.
 echo Installing...
@@ -76,8 +62,8 @@ echo         OK: %INSTALL_DIR%\LocalMonitorAgent.exe
 REM --- Create .env config ---
 echo   [2/5] Creating configuration...
 (
-    echo API_KEY=%API_KEY%
     echo API_BASE_URL=https://emp-manan.mvlab.cloud
+    echo UPDATE_PUBLIC_KEY=MtABa8HiQ+WowR87lbpTs32yZa5OzvP5BgsZlaEBnyw=
     echo LOG_LEVEL=INFO
 ) > "%DATA_DIR%\.env"
 echo         OK: %DATA_DIR%\.env

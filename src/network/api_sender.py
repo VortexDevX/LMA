@@ -14,6 +14,7 @@ import requests
 
 from src.config import config
 from src.storage.sqlite_buffer import VALID_TABLES, SQLiteBuffer
+from src.utils.credential_store import CredentialStore
 
 logger = logging.getLogger("agent.sender")
 MAX_DEBUG_TEXT_LEN = 400
@@ -37,10 +38,19 @@ class APISender:
     and marks records as sent/failed based on response.
     """
 
-    def __init__(self, buffer: SQLiteBuffer):
+    def __init__(
+        self,
+        buffer: SQLiteBuffer,
+        credential_store: CredentialStore | None = None,
+    ):
         self._buffer = buffer
         self._base_url = config.API_BASE_URL.rstrip("/")
-        self._headers = config.api_headers
+        self._credential_store = credential_store or CredentialStore()
+        self._device_token = self._credential_store.load()
+        self._headers = {key: value for key, value in config.api_headers.items() if value}
+        if self._device_token:
+            self._headers.pop("X-API-Key", None)
+            self._headers["X-Device-Token"] = self._device_token
         self._timeout = 10
 
         # Thread control
@@ -63,8 +73,25 @@ class APISender:
 
         logger.info(
             f"APISender initialized (base_url={self._base_url}, "
-            f"interval={config.BATCH_SEND_INTERVAL}s)"
+            f"interval={config.BATCH_SEND_INTERVAL}s, "
+            f"device_credential={'configured' if self._device_token else 'missing'})"
         )
+
+    @property
+    def has_device_token(self) -> bool:
+        return bool(self._device_token)
+
+    def install_device_token(self, token: str) -> None:
+        """Persist a newly enrolled token and use it for future requests."""
+        self._credential_store.save(token)
+        self._device_token = token
+        self._session.headers.pop("X-API-Key", None)
+        self._session.headers["X-Device-Token"] = token
+
+    def clear_device_token(self) -> None:
+        self._credential_store.delete()
+        self._device_token = None
+        self._session.headers.pop("X-Device-Token", None)
 
     # --------------------------------------------------
     # Lifecycle
@@ -412,7 +439,12 @@ class APISender:
     # --------------------------------------------------
 
     def send_immediate(
-        self, endpoint: str, payload: dict, *, include_errors: bool = False
+        self,
+        endpoint: str,
+        payload: dict,
+        *,
+        include_errors: bool = False,
+        bearer_token: str | None = None,
     ) -> dict | None:
         """
         Send a single request immediately (not buffered).
@@ -428,6 +460,13 @@ class APISender:
             response = self._session.post(
                 url,
                 json=payload,
+                headers={
+                    "Authorization": f"Bearer {bearer_token}",
+                    "X-Device-Token": None,
+                    "X-API-Key": None,
+                }
+                if bearer_token
+                else None,
                 timeout=self._timeout,
             )
 

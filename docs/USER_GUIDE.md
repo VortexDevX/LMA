@@ -40,7 +40,7 @@ Domain-level tracking is not equivalent to full browsing history capture.
 
 On first launch, the app asks for:
 
-1. Employee ID (numeric)
+1. Employee code
 2. Password
 3. TOTP code
 
@@ -49,7 +49,8 @@ Depending on launch mode:
 - GUI setup wizard is shown in normal desktop launch
 - CLI setup is used if launched in an interactive terminal
 
-After successful login, device registration is completed and future launches do not ask again.
+After successful login, the device receives its own revocable credential. No API
+key needs to be entered or distributed. Future launches do not ask again.
 
 ## 5. Tray Icon and Menu
 
