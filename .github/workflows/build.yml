@@ -58,6 +58,7 @@ jobs:
     name: Build Windows
     needs: quality
     runs-on: windows-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       id-token: write
