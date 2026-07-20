@@ -94,8 +94,12 @@ if (-not $AllowSelfSigned) {
     throw "Windows signature is not publicly trusted: $($signature.Status)"
 }
 
-if ($signature.Subject -ne $signature.Issuer) {
-    throw "The untrusted Windows signer is not self-signed: $($signature.Subject)"
+$certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
+    [Convert]::FromBase64String($signature.CertificateRawData)
+)
+
+if ($certificate.Subject -ne $certificate.Issuer) {
+    throw "The untrusted Windows signer is not self-signed: $($certificate.Subject)"
 }
 
 $now = Get-Date
@@ -106,10 +110,6 @@ if ($now -lt $signature.NotBefore -or $now -gt $signature.NotAfter) {
 if (-not $signature.HasCodeSigningEku) {
     throw "The self-signed Windows certificate is not valid for code signing."
 }
-
-$certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
-    [Convert]::FromBase64String($signature.CertificateRawData)
-)
 
 # Trust only this embedded self-signed certificate in the ephemeral CI user
 # store, re-run Authenticode verification, and remove it immediately afterward.
