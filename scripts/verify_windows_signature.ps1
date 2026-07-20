@@ -15,61 +15,94 @@ function Get-BoundedAuthenticodeSignature {
         [int]$TimeoutSeconds
     )
 
-    $job = Start-Job -ScriptBlock {
-        param([string]$Path)
+    $workerScriptPath = [System.IO.Path]::ChangeExtension(
+        [System.IO.Path]::GetTempFileName(),
+        ".ps1"
+    )
+    $resultPath = [System.IO.Path]::GetTempFileName()
 
-        $signature = Get-AuthenticodeSignature -FilePath $Path
-        $certificate = $signature.SignerCertificate
-        $timestamp = $signature.TimeStamperCertificate
-        $hasCodeSigningEku = $false
+    # Get-AuthenticodeSignature can block while Windows checks an untrusted
+    # chain.  Run it in an independent process, not a PowerShell job: a job
+    # can also block forever while Stop-Job waits for that native call.
+    @'
+param(
+    [string]$FilePath,
+    [string]$ResultPath
+)
 
-        if ($certificate) {
-            $ekuExtension = $certificate.Extensions |
-                Where-Object { $_.Oid.Value -eq "2.5.29.37" } |
-                Select-Object -First 1
-            $hasCodeSigningEku = $ekuExtension -and @(
-                $ekuExtension.EnhancedKeyUsages |
-                    Where-Object { $_.Value -eq "1.3.6.1.5.5.7.3.3" }
-            ).Count -gt 0
+$ErrorActionPreference = "Stop"
+try {
+    $signature = Get-AuthenticodeSignature -FilePath $FilePath
+    $certificate = $signature.SignerCertificate
+    $timestamp = $signature.TimeStamperCertificate
+    $hasCodeSigningEku = $false
+
+    if ($certificate) {
+        $ekuExtension = $certificate.Extensions |
+            Where-Object { $_.Oid.Value -eq "2.5.29.37" } |
+            Select-Object -First 1
+        $hasCodeSigningEku = $ekuExtension -and @(
+            $ekuExtension.EnhancedKeyUsages |
+                Where-Object { $_.Value -eq "1.3.6.1.5.5.7.3.3" }
+        ).Count -gt 0
+    }
+
+    [pscustomobject]@{
+        Status = [string]$signature.Status
+        HasSigner = [bool]$certificate
+        HasTimestamp = [bool]$timestamp
+        Subject = if ($certificate) { $certificate.Subject } else { "" }
+        Issuer = if ($certificate) { $certificate.Issuer } else { "" }
+        Thumbprint = if ($certificate) { $certificate.Thumbprint } else { "" }
+        NotBefore = if ($certificate) { $certificate.NotBefore } else { $null }
+        NotAfter = if ($certificate) { $certificate.NotAfter } else { $null }
+        HasCodeSigningEku = [bool]$hasCodeSigningEku
+        CertificateRawData = if ($certificate) {
+            [Convert]::ToBase64String($certificate.RawData)
+        } else {
+            ""
         }
-
-        [pscustomobject]@{
-            Status = [string]$signature.Status
-            HasSigner = [bool]$certificate
-            HasTimestamp = [bool]$timestamp
-            Subject = if ($certificate) { $certificate.Subject } else { "" }
-            Issuer = if ($certificate) { $certificate.Issuer } else { "" }
-            Thumbprint = if ($certificate) { $certificate.Thumbprint } else { "" }
-            NotBefore = if ($certificate) { $certificate.NotBefore } else { $null }
-            NotAfter = if ($certificate) { $certificate.NotAfter } else { $null }
-            HasCodeSigningEku = [bool]$hasCodeSigningEku
-            CertificateRawData = if ($certificate) {
-                [Convert]::ToBase64String($certificate.RawData)
-            } else {
-                ""
-            }
-        }
-    } -ArgumentList $FilePath
+    } | ConvertTo-Json -Compress | Set-Content -LiteralPath $ResultPath -Encoding utf8
+}
+catch {
+    $_ | Out-String | Set-Content -LiteralPath $ResultPath -Encoding utf8
+    exit 1
+}
+'@ | Set-Content -LiteralPath $workerScriptPath -Encoding utf8
 
     try {
-        $completed = Wait-Job -Job $job -Timeout $TimeoutSeconds
-        if (-not $completed) {
-            Stop-Job -Job $job -ErrorAction SilentlyContinue
+        $powerShellPath = (Get-Command pwsh -ErrorAction Stop).Source
+        $process = Start-Process -FilePath $powerShellPath -ArgumentList @(
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            $workerScriptPath,
+            "-FilePath",
+            $FilePath,
+            "-ResultPath",
+            $resultPath
+        ) -PassThru -NoNewWindow
+        if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+            $process.Kill($true)
+            $process.WaitForExit()
             throw "Authenticode verification exceeded $TimeoutSeconds seconds."
         }
-        if ($job.State -ne "Completed") {
-            $details = (Receive-Job -Job $job -ErrorAction SilentlyContinue | Out-String).Trim()
-            throw "Authenticode verification job ended as $($job.State). $details"
+        $details = if (Test-Path -LiteralPath $resultPath) {
+            (Get-Content -LiteralPath $resultPath -Raw).Trim()
+        } else {
+            ""
         }
-
-        $result = Receive-Job -Job $job
-        if (-not $result) {
+        if ($process.ExitCode -ne 0) {
+            throw "Authenticode verification subprocess failed. $details"
+        }
+        if (-not $details) {
             throw "Authenticode verification returned no result."
         }
-        return $result
+        return $details | ConvertFrom-Json
     }
     finally {
-        Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $workerScriptPath -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $resultPath -Force -ErrorAction SilentlyContinue
     }
 }
 
